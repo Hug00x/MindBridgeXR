@@ -5,7 +5,7 @@ public class TaskManager : MonoBehaviour
 {
     public static TaskManager Instance;
 
-    [Header("Lista de divisões")]
+    [Header("Lista de divisões da cena atual")]
     public RoomZone[] rooms;
 
     [Header("UI")]
@@ -17,14 +17,56 @@ public class TaskManager : MonoBehaviour
 
     private void Awake()
     {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         Instance = this;
+        DontDestroyOnLoad(gameObject);
     }
 
     private void Start()
     {
-        ClearAllHighlights();
         UpdateCurrentRoomUI();
-        StartNewTask();
+        UpdateTaskUI();
+    }
+
+    public void SetSceneRooms(RoomZone[] newRooms)
+    {
+        rooms = newRooms;
+
+        ClearAllHighlights();
+
+        Debug.Log("TaskManager recebeu " + rooms.Length + " divisões da nova cena.");
+
+        if (targetRoom != null)
+        {
+            bool targetExistsInThisScene = false;
+
+            foreach (RoomZone room in rooms)
+            {
+                if (room == targetRoom)
+                {
+                    targetExistsInThisScene = true;
+                    break;
+                }
+            }
+
+            if (targetExistsInThisScene)
+            {
+                targetRoom.SetHighlight(true);
+            }
+            else
+            {
+                StartNewTask();
+            }
+        }
+        else
+        {
+            StartNewTask();
+        }
     }
 
     public void PlayerEnteredRoom(RoomZone room)
@@ -45,7 +87,7 @@ public class TaskManager : MonoBehaviour
     {
         if (rooms == null || rooms.Length < 2)
         {
-            Debug.LogWarning("Precisas de pelo menos 2 divisões.");
+            Debug.LogWarning("Precisas de pelo menos 2 divisões na cena atual.");
             return;
         }
 
@@ -76,6 +118,9 @@ public class TaskManager : MonoBehaviour
 
     private void ClearAllHighlights()
     {
+        if (rooms == null)
+            return;
+
         foreach (RoomZone room in rooms)
         {
             if (room != null)
