@@ -5,15 +5,25 @@ public class TaskManager : MonoBehaviour
 {
     public static TaskManager Instance;
 
-    [Header("Lista de divisões da cena atual")]
-    public RoomZone[] rooms;
+    [System.Serializable]
+    public class GlobalRoomData
+    {
+        public string roomID;
+        public string roomName;
+        public string sceneName;
+    }
+
+    [Header("Lista global de todas as divisões")]
+    [SerializeField] private GlobalRoomData[] allRooms;
 
     [Header("UI")]
-    public TextMeshProUGUI currentRoomText;
-    public TextMeshProUGUI taskText;
+    [SerializeField] private TextMeshProUGUI currentRoomText;
+    [SerializeField] private TextMeshProUGUI taskText;
 
-    private RoomZone currentRoom;
-    private RoomZone targetRoom;
+    private RoomZone[] rooms;
+    private string currentRoomID;
+    private string currentRoomName;
+    private GlobalRoomData targetRoomData;
 
     private void Awake()
     {
@@ -41,78 +51,86 @@ public class TaskManager : MonoBehaviour
 
         Debug.Log("TaskManager recebeu " + rooms.Length + " divisões da nova cena.");
 
-        if (targetRoom != null)
-        {
-            bool targetExistsInThisScene = false;
-
-            foreach (RoomZone room in rooms)
-            {
-                if (room == targetRoom)
-                {
-                    targetExistsInThisScene = true;
-                    break;
-                }
-            }
-
-            if (targetExistsInThisScene)
-            {
-                targetRoom.SetHighlight(true);
-            }
-            else
-            {
-                StartNewTask();
-            }
-        }
-        else
+        if (targetRoomData == null)
         {
             StartNewTask();
+            return;
         }
+
+        HighlightTargetIfPresentInCurrentScene();
+        UpdateTaskUI();
     }
 
     public void PlayerEnteredRoom(RoomZone room)
     {
-        currentRoom = room;
+        if (room == null)
+            return;
+
+        currentRoomID = room.roomID;
+        currentRoomName = room.roomName;
+
         UpdateCurrentRoomUI();
 
-        Debug.Log("Entraste em: " + room.roomName);
+        Debug.Log("Entraste em: " + room.roomName + " | roomID=" + room.roomID);
 
-        if (targetRoom != null && room == targetRoom)
+        if (targetRoomData != null && room.roomID == targetRoomData.roomID)
         {
-            Debug.Log("Tarefa concluída! Chegaste a: " + targetRoom.roomName);
+            Debug.Log("Tarefa concluída! Chegaste a: " + targetRoomData.roomName);
             StartNewTask();
         }
     }
 
     public void StartNewTask()
     {
-        if (rooms == null || rooms.Length < 2)
+        if (allRooms == null || allRooms.Length < 2)
         {
-            Debug.LogWarning("Precisas de pelo menos 2 divisões na cena atual.");
+            Debug.LogWarning("Precisas de pelo menos 2 divisões na lista global allRooms.");
             return;
         }
 
         ClearAllHighlights();
 
-        RoomZone newTarget = null;
+        GlobalRoomData newTarget = null;
         int safety = 0;
 
-        while (newTarget == null && safety < 50)
+        while (newTarget == null && safety < 100)
         {
-            RoomZone candidate = rooms[Random.Range(0, rooms.Length)];
+            GlobalRoomData candidate = allRooms[Random.Range(0, allRooms.Length)];
 
-            if (candidate != currentRoom)
+            if (!string.IsNullOrWhiteSpace(candidate.roomID) &&
+                candidate.roomID != currentRoomID)
+            {
                 newTarget = candidate;
+            }
 
             safety++;
         }
 
-        targetRoom = newTarget;
+        targetRoomData = newTarget;
 
-        if (targetRoom != null)
+        if (targetRoomData != null)
         {
-            targetRoom.SetHighlight(true);
+            HighlightTargetIfPresentInCurrentScene();
             UpdateTaskUI();
-            Debug.Log("Nova tarefa: Vai para " + targetRoom.roomName);
+
+            Debug.Log("Nova tarefa: Vai para " + targetRoomData.roomName +
+                      " | scene=" + targetRoomData.sceneName +
+                      " | roomID=" + targetRoomData.roomID);
+        }
+    }
+
+    private void HighlightTargetIfPresentInCurrentScene()
+    {
+        if (targetRoomData == null || rooms == null)
+            return;
+
+        foreach (RoomZone room in rooms)
+        {
+            if (room == null)
+                continue;
+
+            bool isTarget = room.roomID == targetRoomData.roomID;
+            room.SetHighlight(isTarget);
         }
     }
 
@@ -133,10 +151,10 @@ public class TaskManager : MonoBehaviour
         if (currentRoomText == null)
             return;
 
-        if (currentRoom != null)
-            currentRoomText.text = "Divisão: " + currentRoom.roomName;
+        if (!string.IsNullOrEmpty(currentRoomName))
+            currentRoomText.text = "Divisão atual: " + currentRoomName;
         else
-            currentRoomText.text = "Divisão: -";
+            currentRoomText.text = "Divisão atual: -";
     }
 
     private void UpdateTaskUI()
@@ -144,8 +162,8 @@ public class TaskManager : MonoBehaviour
         if (taskText == null)
             return;
 
-        if (targetRoom != null)
-            taskText.text = "Tarefa: Vai para " + targetRoom.roomName;
+        if (targetRoomData != null)
+            taskText.text = "Tarefa: Vai para " + targetRoomData.roomName;
         else
             taskText.text = "Tarefa: -";
     }

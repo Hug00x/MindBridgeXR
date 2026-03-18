@@ -2,7 +2,11 @@ using UnityEngine;
 
 public class RoomZone : MonoBehaviour
 {
+    [Header("Identificação")]
+    public string roomID;
     public string roomName;
+
+    [Header("Visual")]
     public GameObject highlightObject;
 
     public void SetHighlight(bool state)
