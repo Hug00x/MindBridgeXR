@@ -8,11 +8,18 @@ public class RoomZone : MonoBehaviour
 
     [Header("Visual")]
     public GameObject highlightObject;
+    public GameObject visitedMarkerObject;
 
     public void SetHighlight(bool state)
     {
         if (highlightObject != null)
             highlightObject.SetActive(state);
+    }
+
+    public void SetVisitedMark(bool state)
+    {
+        if (visitedMarkerObject != null)
+            visitedMarkerObject.SetActive(state);
     }
 
     private void OnTriggerEnter(Collider other)
