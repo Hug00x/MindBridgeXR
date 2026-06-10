@@ -33,11 +33,18 @@ public class TaskManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI centerMessageText;
     [SerializeField] private float roomNameDisplayDuration = 3.5f;
     [SerializeField] private float tutorialCompletionMessageDuration = 3f;
-    [SerializeField] private string tutorialCompletionMessage = "Bom trabalho! Vamos comecar a fase 2.";
+    [SerializeField] private string tutorialCompletionMessage = "Bom trabalho!";
 
     [Header("Fim da Fase 1")]
     [SerializeField] private string initialSceneName;
     [SerializeField] private string initialSpawnID = "Spawn_Initial";
+
+    [Header("Fase 4 - Memoria na Sala de Jantar")]
+    [SerializeField] private bool startDiningMemoryPhaseAfterPhase2 = true;
+    [SerializeField] private DiningMemoryPhaseController diningMemoryPhaseController;
+    [SerializeField] private float guidedCompletionDisplaySeconds = 2.5f;
+    [SerializeField] private string guidedCompletionNextMessage = "Vai ate a mesa na sala de jantar para jogar o jogo da memoria.";
+    [SerializeField] private float guidedTaskStartGraceSeconds = 1.25f;
 
     [Header("Definições")]
     [SerializeField] private bool shuffleTaskOrder = true;
@@ -58,6 +65,9 @@ public class TaskManager : MonoBehaviour
     private bool allTasksCompleted = false;
     private bool tutorialEndSequenceRunning = false;
     private Coroutine centerMessageRoutine;
+    private Coroutine guidedCompletionRoutine;
+    private bool diningMemoryPhaseStarted = false;
+    private float guidedTasksBlockedUntil = -1f;
 
     private void Awake()
     {
@@ -100,6 +110,9 @@ public class TaskManager : MonoBehaviour
 
         if (allTasksCompleted)
         {
+            if (diningMemoryPhaseStarted)
+                return;
+
             UpdateTaskUI();
             return;
         }
@@ -126,6 +139,13 @@ public class TaskManager : MonoBehaviour
 
         Debug.Log("Entraste em: " + room.roomName + " | roomID=" + room.roomID);
 
+        if (diningMemoryPhaseStarted)
+        {
+            EnsureDiningMemoryControllerReference();
+            if (diningMemoryPhaseController != null)
+                diningMemoryPhaseController.NotifyPlayerEnteredRoom(room.roomID);
+        }
+
         if (currentPhase == GamePhase.TutorialExploration)
         {
             ShowRoomNameInCenterTemporarily(room.roomName);
@@ -138,6 +158,9 @@ public class TaskManager : MonoBehaviour
 
         if (targetRoomData != null && room.roomID == targetRoomData.roomID)
         {
+            if (Time.time < guidedTasksBlockedUntil)
+                return;
+
             Debug.Log("Tarefa concluída! Chegaste a: " + targetRoomData.roomName);
 
             currentTaskIndex++;
@@ -222,6 +245,7 @@ public class TaskManager : MonoBehaviour
             return;
 
         currentPhase = GamePhase.GuidedNavigation;
+        guidedTasksBlockedUntil = Time.time + Mathf.Max(0f, guidedTaskStartGraceSeconds);
         Debug.Log("Tutorial concluído. A iniciar Fase 2 (navegação orientada).");
         BuildTaskList();
     }
@@ -266,12 +290,17 @@ public class TaskManager : MonoBehaviour
             return;
         }
 
+        HashSet<string> uniqueRoomIDs = new HashSet<string>();
+
         foreach (GlobalRoomData room in allRooms)
         {
             if (room == null)
                 continue;
 
             if (string.IsNullOrWhiteSpace(room.roomID))
+                continue;
+
+            if (!uniqueRoomIDs.Add(room.roomID))
                 continue;
 
             taskOrder.Add(room);
@@ -361,9 +390,66 @@ public class TaskManager : MonoBehaviour
 
         targetRoomData = null;
         allTasksCompleted = true;
-        UpdateTaskUI();
-
         Debug.Log("Todas as tarefas foram concluídas.");
+
+        if (guidedCompletionRoutine != null)
+            StopCoroutine(guidedCompletionRoutine);
+
+        guidedCompletionRoutine = StartCoroutine(CompleteGuidedPhaseThenStartNext());
+    }
+
+    private IEnumerator CompleteGuidedPhaseThenStartNext()
+    {
+        if (taskText != null)
+            taskText.text = "Tarefa concluída";
+
+        if (!string.IsNullOrWhiteSpace(guidedCompletionNextMessage) && taskText != null)
+        {
+            yield return new WaitForSeconds(0.2f);
+            taskText.text = guidedCompletionNextMessage;
+        }
+
+        if (guidedCompletionDisplaySeconds > 0f)
+            yield return new WaitForSeconds(guidedCompletionDisplaySeconds);
+
+        bool startedDiningPhase = TryStartDiningMemoryPhase();
+        if (!startedDiningPhase)
+            UpdateTaskUI();
+
+        guidedCompletionRoutine = null;
+    }
+
+    private bool TryStartDiningMemoryPhase()
+    {
+        if (!startDiningMemoryPhaseAfterPhase2)
+            return false;
+
+        if (diningMemoryPhaseStarted)
+            return true;
+
+        EnsureDiningMemoryControllerReference();
+
+        if (diningMemoryPhaseController == null)
+        {
+            Debug.LogWarning("DiningMemoryPhaseController não atribuído no TaskManager.");
+            return false;
+        }
+
+        diningMemoryPhaseStarted = true;
+        diningMemoryPhaseController.BeginPhase();
+
+        if (!string.IsNullOrWhiteSpace(currentRoomID))
+            diningMemoryPhaseController.NotifyPlayerEnteredRoom(currentRoomID);
+
+        return true;
+    }
+
+    private void EnsureDiningMemoryControllerReference()
+    {
+        if (diningMemoryPhaseController != null)
+            return;
+
+        diningMemoryPhaseController = FindFirstObjectByType<DiningMemoryPhaseController>(FindObjectsInactive.Exclude);
     }
 
     private void HighlightTargetIfPresentInCurrentScene()
@@ -407,6 +493,9 @@ public class TaskManager : MonoBehaviour
     private void UpdateTaskUI()
     {
         if (taskText == null)
+            return;
+
+        if (diningMemoryPhaseStarted)
             return;
 
         if (currentPhase == GamePhase.TutorialExploration)
