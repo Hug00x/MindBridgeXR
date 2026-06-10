@@ -11,7 +11,8 @@ public class TaskManager : MonoBehaviour
     private enum GamePhase
     {
         TutorialExploration,
-        GuidedNavigation
+        GuidedNavigation,
+        OutdoorFood
     }
 
     [System.Serializable]
@@ -39,12 +40,18 @@ public class TaskManager : MonoBehaviour
     [SerializeField] private string initialSceneName;
     [SerializeField] private string initialSpawnID = "Spawn_Initial";
 
-    [Header("Fase 4 - Memoria na Sala de Jantar")]
+    [Header("Fase 3 - Memoria na Sala de Jantar")]
     [SerializeField] private bool startDiningMemoryPhaseAfterPhase2 = true;
     [SerializeField] private DiningMemoryPhaseController diningMemoryPhaseController;
     [SerializeField] private float guidedCompletionDisplaySeconds = 2.5f;
     [SerializeField] private string guidedCompletionNextMessage = "Vai ate a mesa na sala de jantar para jogar o jogo da memoria.";
     [SerializeField] private float guidedTaskStartGraceSeconds = 1.25f;
+
+    [Header("Fase 4 - Alimentos no Exterior")]
+    [SerializeField] private bool startOutdoorFoodPhaseAfterMemory = true;
+    [SerializeField] private OutdoorFoodPhaseController outdoorFoodPhaseController;
+    [SerializeField] private float memoryCompletionToOutdoorDelay = 2.5f;
+    [SerializeField] private string outdoorFoodStartTask = "Fase 4: Vai ate ao exterior.";
 
     [Header("Definições")]
     [SerializeField] private bool shuffleTaskOrder = true;
@@ -66,8 +73,14 @@ public class TaskManager : MonoBehaviour
     private bool tutorialEndSequenceRunning = false;
     private Coroutine centerMessageRoutine;
     private Coroutine guidedCompletionRoutine;
+    private Coroutine outdoorFoodStartRoutine;
     private bool diningMemoryPhaseStarted = false;
+    private bool diningMemoryPhaseCompleted = false;
+    private bool outdoorFoodPhaseStarted = false;
+    private bool outdoorFoodPhaseCompleted = false;
     private float guidedTasksBlockedUntil = -1f;
+    private DiningMemoryPhaseController subscribedDiningMemoryPhaseController;
+    private OutdoorFoodPhaseController subscribedOutdoorFoodPhaseController;
 
     private void Awake()
     {
@@ -84,9 +97,17 @@ public class TaskManager : MonoBehaviour
     private void Start()
     {
         BuildGlobalRoomCatalog();
+        EnsureDiningMemoryControllerReference();
+        EnsureOutdoorFoodControllerReference();
         UpdateCurrentRoomUI();
         HideCenterMessage();
         UpdateTaskUI();
+    }
+
+    private void OnDestroy()
+    {
+        UnsubscribeDiningMemoryPhaseEvents();
+        UnsubscribeOutdoorFoodPhaseEvents();
     }
 
     public void SetSceneRooms(RoomZone[] newRooms)
@@ -105,6 +126,14 @@ public class TaskManager : MonoBehaviour
         if (currentPhase == GamePhase.TutorialExploration)
         {
             UpdateTaskUI();
+            return;
+        }
+
+        if (outdoorFoodPhaseStarted && !outdoorFoodPhaseCompleted)
+        {
+            EnsureOutdoorFoodControllerReference();
+            if (outdoorFoodPhaseController != null && !outdoorFoodPhaseController.IsRunning)
+                outdoorFoodPhaseController.BeginPhase(true);
             return;
         }
 
@@ -139,11 +168,20 @@ public class TaskManager : MonoBehaviour
 
         Debug.Log("Entraste em: " + room.roomName + " | roomID=" + room.roomID);
 
-        if (diningMemoryPhaseStarted)
+        if (diningMemoryPhaseStarted && !diningMemoryPhaseCompleted)
         {
             EnsureDiningMemoryControllerReference();
             if (diningMemoryPhaseController != null)
                 diningMemoryPhaseController.NotifyPlayerEnteredRoom(room.roomID);
+        }
+
+        if (outdoorFoodPhaseStarted && !outdoorFoodPhaseCompleted)
+        {
+            EnsureOutdoorFoodControllerReference();
+            if (outdoorFoodPhaseController != null)
+                outdoorFoodPhaseController.NotifyPlayerEnteredRoom(room.roomID);
+            else if (taskText != null)
+                taskText.text = outdoorFoodStartTask;
         }
 
         if (currentPhase == GamePhase.TutorialExploration)
@@ -152,6 +190,9 @@ public class TaskManager : MonoBehaviour
             HandleTutorialRoomVisit(room);
             return;
         }
+
+        if (currentPhase == GamePhase.OutdoorFood)
+            return;
 
         if (allTasksCompleted)
             return;
@@ -446,10 +487,139 @@ public class TaskManager : MonoBehaviour
 
     private void EnsureDiningMemoryControllerReference()
     {
-        if (diningMemoryPhaseController != null)
+        if (diningMemoryPhaseController == null)
+            diningMemoryPhaseController = FindFirstObjectByType<DiningMemoryPhaseController>(FindObjectsInactive.Exclude);
+
+        SubscribeDiningMemoryPhaseEvents();
+    }
+
+    public void RegisterOutdoorFoodPhaseController(OutdoorFoodPhaseController controller)
+    {
+        if (controller == null)
             return;
 
-        diningMemoryPhaseController = FindFirstObjectByType<DiningMemoryPhaseController>(FindObjectsInactive.Exclude);
+        if (outdoorFoodPhaseController != controller)
+        {
+            UnsubscribeOutdoorFoodPhaseEvents();
+            outdoorFoodPhaseController = controller;
+            SubscribeOutdoorFoodPhaseEvents();
+        }
+
+        if (outdoorFoodPhaseStarted && !outdoorFoodPhaseCompleted && !outdoorFoodPhaseController.IsRunning)
+            outdoorFoodPhaseController.BeginPhase(true);
+    }
+
+    private void EnsureOutdoorFoodControllerReference()
+    {
+        if (outdoorFoodPhaseController == null)
+            outdoorFoodPhaseController = FindFirstObjectByType<OutdoorFoodPhaseController>(FindObjectsInactive.Exclude);
+
+        SubscribeOutdoorFoodPhaseEvents();
+    }
+
+    private void SubscribeDiningMemoryPhaseEvents()
+    {
+        if (subscribedDiningMemoryPhaseController == diningMemoryPhaseController)
+            return;
+
+        UnsubscribeDiningMemoryPhaseEvents();
+
+        if (diningMemoryPhaseController == null)
+            return;
+
+        subscribedDiningMemoryPhaseController = diningMemoryPhaseController;
+        subscribedDiningMemoryPhaseController.PhaseCompleted += OnDiningMemoryPhaseCompleted;
+    }
+
+    private void UnsubscribeDiningMemoryPhaseEvents()
+    {
+        if (subscribedDiningMemoryPhaseController != null)
+            subscribedDiningMemoryPhaseController.PhaseCompleted -= OnDiningMemoryPhaseCompleted;
+
+        subscribedDiningMemoryPhaseController = null;
+    }
+
+    private void SubscribeOutdoorFoodPhaseEvents()
+    {
+        if (subscribedOutdoorFoodPhaseController == outdoorFoodPhaseController)
+            return;
+
+        UnsubscribeOutdoorFoodPhaseEvents();
+
+        if (outdoorFoodPhaseController == null)
+            return;
+
+        subscribedOutdoorFoodPhaseController = outdoorFoodPhaseController;
+        subscribedOutdoorFoodPhaseController.PhaseCompleted += OnOutdoorFoodPhaseCompleted;
+    }
+
+    private void UnsubscribeOutdoorFoodPhaseEvents()
+    {
+        if (subscribedOutdoorFoodPhaseController != null)
+            subscribedOutdoorFoodPhaseController.PhaseCompleted -= OnOutdoorFoodPhaseCompleted;
+
+        subscribedOutdoorFoodPhaseController = null;
+    }
+
+    private void OnDiningMemoryPhaseCompleted()
+    {
+        if (diningMemoryPhaseCompleted)
+            return;
+
+        diningMemoryPhaseCompleted = true;
+
+        if (!startOutdoorFoodPhaseAfterMemory)
+            return;
+
+        if (outdoorFoodStartRoutine != null)
+            StopCoroutine(outdoorFoodStartRoutine);
+
+        outdoorFoodStartRoutine = StartCoroutine(StartOutdoorFoodPhaseAfterDelay());
+    }
+
+    private IEnumerator StartOutdoorFoodPhaseAfterDelay()
+    {
+        if (memoryCompletionToOutdoorDelay > 0f)
+            yield return new WaitForSeconds(memoryCompletionToOutdoorDelay);
+
+        TryStartOutdoorFoodPhase();
+        outdoorFoodStartRoutine = null;
+    }
+
+    private bool TryStartOutdoorFoodPhase()
+    {
+        if (!startOutdoorFoodPhaseAfterMemory)
+            return false;
+
+        if (outdoorFoodPhaseStarted)
+            return true;
+
+        outdoorFoodPhaseStarted = true;
+        outdoorFoodPhaseCompleted = false;
+        currentPhase = GamePhase.OutdoorFood;
+        ClearAllHighlights();
+
+        EnsureOutdoorFoodControllerReference();
+
+        if (outdoorFoodPhaseController != null)
+        {
+            outdoorFoodPhaseController.BeginPhase(true);
+        }
+        else if (taskText != null)
+        {
+            taskText.text = outdoorFoodStartTask;
+        }
+
+        return true;
+    }
+
+    private void OnOutdoorFoodPhaseCompleted()
+    {
+        outdoorFoodPhaseCompleted = true;
+        currentPhase = GamePhase.OutdoorFood;
+
+        if (taskText != null)
+            taskText.text = "Fase 4 concluida";
     }
 
     private void HighlightTargetIfPresentInCurrentScene()
@@ -493,6 +663,9 @@ public class TaskManager : MonoBehaviour
     private void UpdateTaskUI()
     {
         if (taskText == null)
+            return;
+
+        if (outdoorFoodPhaseStarted)
             return;
 
         if (diningMemoryPhaseStarted)

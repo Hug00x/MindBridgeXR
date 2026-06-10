@@ -2293,6 +2293,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &130635377 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 3702954908427250903, guid: 7488164efb2fe924caeca24d87b134ea, type: 3}
@@ -2598,6 +2599,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &147874859 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 4150293072761553892, guid: 7488164efb2fe924caeca24d87b134ea, type: 3}
@@ -3259,6 +3261,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &175610165 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -9037742941943091983, guid: 7488164efb2fe924caeca24d87b134ea, type: 3}
@@ -5100,6 +5103,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &298376902 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -3772082790851422137, guid: 7488164efb2fe924caeca24d87b134ea, type: 3}
@@ -6540,6 +6544,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &358811187
 GameObject:
   m_ObjectHideFlags: 0
@@ -7131,6 +7136,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &402480749
 GameObject:
   m_ObjectHideFlags: 0
@@ -8846,6 +8852,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &486207999 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 5495611472272168953, guid: 7488164efb2fe924caeca24d87b134ea, type: 3}
@@ -9030,6 +9037,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &496062545 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 259129570823957253, guid: 7488164efb2fe924caeca24d87b134ea, type: 3}
@@ -10643,6 +10651,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &621387665 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 2545615808326138918, guid: 7488164efb2fe924caeca24d87b134ea, type: 3}
@@ -17305,6 +17314,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &1156548206 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 8777015004496914929, guid: 7488164efb2fe924caeca24d87b134ea, type: 3}
@@ -17786,6 +17796,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &1186748532 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -4551459701545546072, guid: 7488164efb2fe924caeca24d87b134ea, type: 3}
@@ -31098,6 +31109,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &1405397052 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -8640410801515424252, guid: 7488164efb2fe924caeca24d87b134ea, type: 3}
@@ -32221,6 +32233,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &1453806726
 GameObject:
   m_ObjectHideFlags: 0
@@ -33031,6 +33044,10 @@ MonoBehaviour:
   guidedCompletionDisplaySeconds: 2.5
   guidedCompletionNextMessage: "Vai at\xE9 a mesa na sala de jantar"
   guidedTaskStartGraceSeconds: 1.25
+  startOutdoorFoodPhaseAfterMemory: 1
+  outdoorFoodPhaseController: {fileID: 0}
+  memoryCompletionToOutdoorDelay: 2.5
+  outdoorFoodStartTask: Vai ate ao exterior.
   shuffleTaskOrder: 0
   maxTasksPerRound: 1
 --- !u!4 &1543245247
@@ -34201,7 +34218,7 @@ MonoBehaviour:
   - {fileID: 1453200407}
   - {fileID: 2035890324}
   mismatchHideDelay: 1
-  previewDuration: 5
+  previewDuration: 10
 --- !u!114 &1603509843
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -34334,6 +34351,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &1604714563 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 4141694627559823423, guid: 7488164efb2fe924caeca24d87b134ea, type: 3}
@@ -35479,6 +35497,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &1681214817 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -7030495503824654529, guid: 7488164efb2fe924caeca24d87b134ea, type: 3}
@@ -35938,6 +35957,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &1740137889
 GameObject:
   m_ObjectHideFlags: 0
@@ -38170,6 +38190,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &1965264402 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 4626478489973172285, guid: 7488164efb2fe924caeca24d87b134ea, type: 3}
@@ -39438,6 +39459,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &2039361822
 GameObject:
   m_ObjectHideFlags: 0
@@ -41529,6 +41551,7 @@ MonoBehaviour:
   flipDuration: 0.12
   startsFaceDown: 1
   hiddenYOffset: 0.003
+  preserveWorldXZDuringFlip: 1
 --- !u!1 &2145339001 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 4620548959335378316, guid: 7488164efb2fe924caeca24d87b134ea, type: 3}
