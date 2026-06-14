@@ -83,7 +83,10 @@ public class SceneTransitionManager : MonoBehaviour
         {
             Debug.Log("Spawn encontrado com ID: " + spawnPoint.spawnID);
 
-            if (spawnPoint.spawnID != pendingSpawnID)
+            bool matchesSpawnID = spawnPoint.spawnID == pendingSpawnID;
+            bool matchesObjectName = spawnPoint.gameObject.name == pendingSpawnID;
+
+            if (!matchesSpawnID && !matchesObjectName)
                 continue;
 
             GameObject xrRigObject = GameObject.FindGameObjectWithTag("Player");

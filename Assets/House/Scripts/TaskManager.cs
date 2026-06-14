@@ -12,6 +12,7 @@ public class TaskManager : MonoBehaviour
     {
         TutorialExploration,
         GuidedNavigation,
+        DiningMemory,
         OutdoorFood
     }
 
@@ -26,25 +27,46 @@ public class TaskManager : MonoBehaviour
     [Header("Lista global de todas as divisões")]
     [SerializeField] private GlobalRoomData[] allRooms;
 
-    [Header("UI")]
-    [SerializeField] private TextMeshProUGUI currentRoomText;
-    [SerializeField] private TextMeshProUGUI taskText;
+    [Header("Task Text")]
+    [SerializeField] private TMP_Text currentRoomText;
+    [SerializeField] private TMP_Text taskText;
 
-    [Header("UI Centro (Fase 1)")]
-    [SerializeField] private TextMeshProUGUI centerMessageText;
+    [Header("Center Text (Fase 1)")]
+    [SerializeField] private TMP_Text centerMessageText;
     [SerializeField] private float roomNameDisplayDuration = 3.5f;
     [SerializeField] private float tutorialCompletionMessageDuration = 3f;
     [SerializeField] private string tutorialCompletionMessage = "Bom trabalho!";
 
+    [Header("Textos de introducao das fases")]
+    [SerializeField] private GameObject phase1TextsRoot;
+    [SerializeField] private string phase1TextsRootName = "TextsFase1";
+    [SerializeField] private string alternatePhase1TextsRootName = "Texts1Fase";
+    [SerializeField] private string[] additionalPhase1TextsRootNames = { "TextFase1", "textfase1" };
+    [SerializeField] private GameObject phase2TextsRoot;
+    [SerializeField] private string phase2TextsRootName = "TextsFase2";
+    [SerializeField] private string[] additionalPhase2TextsRootNames = { "TextFase2", "textfase2" };
+    [SerializeField] private TMP_Text phase2TaskListText;
+    [SerializeField] private string phase2TaskListTextName = "Phase2TaskListText";
+    [SerializeField] private string phase2TaskListHeader = "Fase 2 - Encontrar divisões\n\nSegue as instruções e vai até as divisões indicadas.";
+    [SerializeField] private GameObject phase3TextsRoot;
+    [SerializeField] private string phase3TextsRootName = "TextsFase3";
+    [SerializeField] private string[] additionalPhase3TextsRootNames = { "TextFase3", "textfase3" };
+    [SerializeField] private GameObject phase4TextsRoot;
+    [SerializeField] private string phase4TextsRootName = "TextsFase4";
+    [SerializeField] private string[] additionalPhase4TextsRootNames = { "TextFase4", "textfase4" };
+
     [Header("Fim da Fase 1")]
     [SerializeField] private string initialSceneName;
     [SerializeField] private string initialSpawnID = "Spawn_Initial";
+    [SerializeField] private bool returnToInitialSpawnBetweenPhases = true;
+    [SerializeField] private float phaseStartDelayAfterTeleport = 0.2f;
 
     [Header("Fase 3 - Memoria na Sala de Jantar")]
     [SerializeField] private bool startDiningMemoryPhaseAfterPhase2 = true;
     [SerializeField] private DiningMemoryPhaseController diningMemoryPhaseController;
     [SerializeField] private float guidedCompletionDisplaySeconds = 2.5f;
     [SerializeField] private string guidedCompletionNextMessage = "Vai ate a mesa na sala de jantar para jogar o jogo da memoria.";
+    [SerializeField] private string diningMemoryStartTask = "Fase 3: Vai ate a sala de jantar e joga uma ronda do jogo da memoria.";
     [SerializeField] private float guidedTaskStartGraceSeconds = 1.25f;
 
     [Header("Fase 4 - Alimentos no Exterior")]
@@ -52,6 +74,7 @@ public class TaskManager : MonoBehaviour
     [SerializeField] private OutdoorFoodPhaseController outdoorFoodPhaseController;
     [SerializeField] private float memoryCompletionToOutdoorDelay = 2.5f;
     [SerializeField] private string outdoorFoodStartTask = "Fase 4: Vai ate ao exterior.";
+    [SerializeField] private string outdoorFoodCompletedTask = "Fase 4 concluida";
 
     [Header("Definições")]
     [SerializeField] private bool shuffleTaskOrder = true;
@@ -101,6 +124,7 @@ public class TaskManager : MonoBehaviour
         EnsureOutdoorFoodControllerReference();
         UpdateCurrentRoomUI();
         HideCenterMessage();
+        RefreshPhaseTextsVisibility();
         UpdateTaskUI();
     }
 
@@ -115,6 +139,8 @@ public class TaskManager : MonoBehaviour
         rooms = newRooms;
 
         ClearAllHighlights();
+        ClearScenePhaseTextReferences();
+        RefreshPhaseTextsVisibility();
 
         if (currentPhase == GamePhase.TutorialExploration)
             ApplyVisitedMarksInCurrentScene();
@@ -276,7 +302,7 @@ public class TaskManager : MonoBehaviour
         ClearAllVisitedMarksInCurrentScene();
 
         StartGuidedNavigationPhase();
-        ReturnToInitialSpawn();
+        yield return StartCoroutine(ReturnToInitialSpawnThen(null));
         tutorialEndSequenceRunning = false;
     }
 
@@ -287,12 +313,19 @@ public class TaskManager : MonoBehaviour
 
         currentPhase = GamePhase.GuidedNavigation;
         guidedTasksBlockedUntil = Time.time + Mathf.Max(0f, guidedTaskStartGraceSeconds);
+        RefreshPhaseTextsVisibility();
         Debug.Log("Tutorial concluído. A iniciar Fase 2 (navegação orientada).");
         BuildTaskList();
     }
 
-    private void ReturnToInitialSpawn()
+    private IEnumerator ReturnToInitialSpawnThen(System.Action afterReturn)
     {
+        if (!returnToInitialSpawnBetweenPhases)
+        {
+            afterReturn?.Invoke();
+            yield break;
+        }
+
         string sceneToLoad = string.IsNullOrWhiteSpace(initialSceneName)
             ? SceneManager.GetActiveScene().name
             : initialSceneName;
@@ -300,20 +333,35 @@ public class TaskManager : MonoBehaviour
         if (SceneTransitionManager.Instance == null)
         {
             Debug.LogWarning("SceneTransitionManager não encontrado. Não foi possível voltar ao spawn inicial automaticamente.");
-            return;
+            afterReturn?.Invoke();
+            yield break;
         }
 
         if (string.IsNullOrWhiteSpace(initialSpawnID))
         {
             Debug.LogWarning("initialSpawnID está vazio no TaskManager.");
-            return;
+            afterReturn?.Invoke();
+            yield break;
         }
 
         if (SceneTransitionManager.Instance.IsTransitioning)
-            return;
+        {
+            while (SceneTransitionManager.Instance != null && SceneTransitionManager.Instance.IsTransitioning)
+                yield return null;
+        }
 
         Debug.Log("A regressar ao início da experiência: cena=" + sceneToLoad + " | spawn=" + initialSpawnID);
         SceneTransitionManager.Instance.TransitionToScene(sceneToLoad, initialSpawnID);
+
+        while (SceneTransitionManager.Instance != null && SceneTransitionManager.Instance.IsTransitioning)
+            yield return null;
+
+        if (phaseStartDelayAfterTeleport > 0f)
+            yield return new WaitForSeconds(phaseStartDelayAfterTeleport);
+
+        ClearScenePhaseTextReferences();
+        RefreshPhaseTextsVisibility();
+        afterReturn?.Invoke();
     }
 
     private void BuildTaskList()
@@ -364,6 +412,7 @@ public class TaskManager : MonoBehaviour
             Debug.Log("Ordem[" + i + "] = " + taskOrder[i].roomName + " | cena=" + taskOrder[i].sceneName);
         }
 
+        UpdatePhase2TaskListText();
         SetNextTaskFromList();
     }
 
@@ -402,6 +451,7 @@ public class TaskManager : MonoBehaviour
         {
             targetRoomData = null;
             allTasksCompleted = true;
+            UpdatePhase2TaskListText();
             UpdateTaskUI();
             return;
         }
@@ -417,6 +467,7 @@ public class TaskManager : MonoBehaviour
                 targetRoomData = candidate;
 
                 HighlightTargetIfPresentInCurrentScene();
+                UpdatePhase2TaskListText();
                 UpdateTaskUI();
 
                 Debug.Log("Nova tarefa: Vai para " + targetRoomData.roomName +
@@ -431,6 +482,7 @@ public class TaskManager : MonoBehaviour
 
         targetRoomData = null;
         allTasksCompleted = true;
+        UpdatePhase2TaskListText();
         Debug.Log("Todas as tarefas foram concluídas.");
 
         if (guidedCompletionRoutine != null)
@@ -453,9 +505,26 @@ public class TaskManager : MonoBehaviour
         if (guidedCompletionDisplaySeconds > 0f)
             yield return new WaitForSeconds(guidedCompletionDisplaySeconds);
 
-        bool startedDiningPhase = TryStartDiningMemoryPhase();
-        if (!startedDiningPhase)
-            UpdateTaskUI();
+        bool shouldStartDiningPhase = startDiningMemoryPhaseAfterPhase2 && !diningMemoryPhaseStarted;
+
+        if (shouldStartDiningPhase && !string.IsNullOrWhiteSpace(diningMemoryStartTask) && taskText != null)
+            taskText.text = diningMemoryStartTask;
+
+        if (shouldStartDiningPhase)
+        {
+            yield return StartCoroutine(ReturnToInitialSpawnThen(() =>
+            {
+                bool startedDiningPhase = TryStartDiningMemoryPhase();
+                if (!startedDiningPhase)
+                    UpdateTaskUI();
+            }));
+        }
+        else
+        {
+            bool startedDiningPhase = TryStartDiningMemoryPhase();
+            if (!startedDiningPhase)
+                UpdateTaskUI();
+        }
 
         guidedCompletionRoutine = null;
     }
@@ -477,6 +546,8 @@ public class TaskManager : MonoBehaviour
         }
 
         diningMemoryPhaseStarted = true;
+        currentPhase = GamePhase.DiningMemory;
+        RefreshPhaseTextsVisibility();
         diningMemoryPhaseController.BeginPhase();
 
         if (!string.IsNullOrWhiteSpace(currentRoomID))
@@ -582,7 +653,10 @@ public class TaskManager : MonoBehaviour
         if (memoryCompletionToOutdoorDelay > 0f)
             yield return new WaitForSeconds(memoryCompletionToOutdoorDelay);
 
-        TryStartOutdoorFoodPhase();
+        if (!string.IsNullOrWhiteSpace(outdoorFoodStartTask) && taskText != null)
+            taskText.text = outdoorFoodStartTask;
+
+        yield return StartCoroutine(ReturnToInitialSpawnThen(() => TryStartOutdoorFoodPhase()));
         outdoorFoodStartRoutine = null;
     }
 
@@ -597,13 +671,14 @@ public class TaskManager : MonoBehaviour
         outdoorFoodPhaseStarted = true;
         outdoorFoodPhaseCompleted = false;
         currentPhase = GamePhase.OutdoorFood;
+        RefreshPhaseTextsVisibility();
         ClearAllHighlights();
 
         EnsureOutdoorFoodControllerReference();
 
         if (outdoorFoodPhaseController != null)
         {
-            outdoorFoodPhaseController.BeginPhase(true);
+            outdoorFoodPhaseController.BeginPhase(false);
         }
         else if (taskText != null)
         {
@@ -617,9 +692,10 @@ public class TaskManager : MonoBehaviour
     {
         outdoorFoodPhaseCompleted = true;
         currentPhase = GamePhase.OutdoorFood;
+        RefreshPhaseTextsVisibility();
 
         if (taskText != null)
-            taskText.text = "Fase 4 concluida";
+            taskText.text = outdoorFoodCompletedTask;
     }
 
     private void HighlightTargetIfPresentInCurrentScene()
@@ -733,6 +809,173 @@ public class TaskManager : MonoBehaviour
 
         centerMessageText.text = string.Empty;
         centerMessageText.gameObject.SetActive(false);
+    }
+
+    private void RefreshPhaseTextsVisibility()
+    {
+        ResolvePhaseTextRoots();
+        ResolvePhaseTextComponents();
+        UpdatePhase2TaskListText();
+
+        SetPhaseTextRootVisible(phase1TextsRoot, currentPhase == GamePhase.TutorialExploration);
+        SetPhaseTextRootVisible(phase2TextsRoot, currentPhase == GamePhase.GuidedNavigation);
+        SetPhaseTextRootVisible(phase3TextsRoot, currentPhase == GamePhase.DiningMemory);
+        SetPhaseTextRootVisible(phase4TextsRoot, currentPhase == GamePhase.OutdoorFood && !outdoorFoodPhaseCompleted);
+    }
+
+    private void ResolvePhaseTextRoots()
+    {
+        if (phase1TextsRoot == null)
+            phase1TextsRoot = FindGameObjectByNameIncludingInactive(phase1TextsRootName);
+
+        if (phase1TextsRoot == null)
+            phase1TextsRoot = FindGameObjectByNameIncludingInactive(alternatePhase1TextsRootName);
+
+        if (phase1TextsRoot == null && additionalPhase1TextsRootNames != null)
+        {
+            foreach (string rootName in additionalPhase1TextsRootNames)
+            {
+                phase1TextsRoot = FindGameObjectByNameIncludingInactive(rootName);
+
+                if (phase1TextsRoot != null)
+                    break;
+            }
+        }
+
+        if (phase2TextsRoot == null)
+            phase2TextsRoot = FindGameObjectByNameIncludingInactive(phase2TextsRootName);
+
+        if (phase2TextsRoot == null)
+            phase2TextsRoot = FindFirstGameObjectByNameIncludingInactive(additionalPhase2TextsRootNames);
+
+        if (phase3TextsRoot == null)
+            phase3TextsRoot = FindGameObjectByNameIncludingInactive(phase3TextsRootName);
+
+        if (phase3TextsRoot == null)
+            phase3TextsRoot = FindFirstGameObjectByNameIncludingInactive(additionalPhase3TextsRootNames);
+
+        if (phase4TextsRoot == null)
+            phase4TextsRoot = FindGameObjectByNameIncludingInactive(phase4TextsRootName);
+
+        if (phase4TextsRoot == null)
+            phase4TextsRoot = FindFirstGameObjectByNameIncludingInactive(additionalPhase4TextsRootNames);
+    }
+
+    private void ResolvePhaseTextComponents()
+    {
+        if (phase2TaskListText != null)
+            return;
+
+        GameObject textObject = FindGameObjectByNameIncludingInactive(phase2TaskListTextName);
+        if (textObject != null)
+            phase2TaskListText = textObject.GetComponent<TMP_Text>();
+
+        if (phase2TaskListText == null && phase2TextsRoot != null)
+            phase2TaskListText = phase2TextsRoot.GetComponentInChildren<TMP_Text>(true);
+    }
+
+    private void ClearScenePhaseTextReferences()
+    {
+        phase1TextsRoot = null;
+        phase2TextsRoot = null;
+        phase3TextsRoot = null;
+        phase4TextsRoot = null;
+        phase2TaskListText = null;
+    }
+
+    private void UpdatePhase2TaskListText()
+    {
+        if (phase2TaskListText == null)
+            return;
+
+        if (taskOrder == null || taskOrder.Count == 0)
+        {
+            phase2TaskListText.text = phase2TaskListHeader + "\n\nLista ainda nao preparada.";
+            return;
+        }
+
+        System.Text.StringBuilder builder = new System.Text.StringBuilder();
+
+        if (!string.IsNullOrWhiteSpace(phase2TaskListHeader))
+            builder.AppendLine(phase2TaskListHeader);
+
+        builder.AppendLine();
+
+        for (int i = 0; i < taskOrder.Count; i++)
+        {
+            GlobalRoomData room = taskOrder[i];
+            string roomName = room != null && !string.IsNullOrWhiteSpace(room.roomName)
+                ? room.roomName
+                : "Divisao " + (i + 1);
+
+            builder.AppendLine((i + 1) + "º - " + roomName);
+        }
+
+        if (allTasksCompleted)
+        {
+            builder.AppendLine();
+            builder.AppendLine("Todas as divisoes foram encontradas.");
+        }
+
+        phase2TaskListText.text = builder.ToString();
+    }
+
+    private void SetPhaseTextRootVisible(GameObject root, bool visible)
+    {
+        if (root == null)
+            return;
+
+        if (visible)
+            EnsureAncestorsActive(root.transform);
+
+        if (root.activeSelf != visible)
+            root.SetActive(visible);
+    }
+
+    private void EnsureAncestorsActive(Transform child)
+    {
+        if (child == null)
+            return;
+
+        Transform parent = child.parent;
+
+        if (parent != null)
+            EnsureAncestorsActive(parent);
+
+        if (!child.gameObject.activeSelf)
+            child.gameObject.SetActive(true);
+    }
+
+    private GameObject FindGameObjectByNameIncludingInactive(string objectName)
+    {
+        if (string.IsNullOrWhiteSpace(objectName))
+            return null;
+
+        Transform[] transforms = FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        foreach (Transform item in transforms)
+        {
+            if (item != null && string.Equals(item.gameObject.name, objectName, System.StringComparison.OrdinalIgnoreCase))
+                return item.gameObject;
+        }
+
+        return null;
+    }
+
+    private GameObject FindFirstGameObjectByNameIncludingInactive(string[] objectNames)
+    {
+        if (objectNames == null)
+            return null;
+
+        foreach (string objectName in objectNames)
+        {
+            GameObject found = FindGameObjectByNameIncludingInactive(objectName);
+
+            if (found != null)
+                return found;
+        }
+
+        return null;
     }
 
     private void ShuffleList(List<GlobalRoomData> list)

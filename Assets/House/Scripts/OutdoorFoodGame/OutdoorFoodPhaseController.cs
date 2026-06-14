@@ -42,9 +42,9 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     [SerializeField] private GameObject listArrowIndicator;
     [SerializeField] private GameObject tableHighlight;
 
-    [Header("UI")]
-    [SerializeField] private TextMeshProUGUI taskText;
-    [SerializeField] private TextMeshProUGUI centerMessageText;
+    [Header("Task Text")]
+    [SerializeField] private TMP_Text taskText;
+    [SerializeField] private TMP_Text centerMessageText;
     [SerializeField] private float centerMessageDuration = 2.5f;
 
     [Header("Messages")]
@@ -263,7 +263,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
 
     private void ResetFoodCollectibles()
     {
-        FoodCollectible[] foods = FindObjectsByType<FoodCollectible>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        FoodCollectible[] foods = FindObjectsByType<FoodCollectible>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
 
         foreach (FoodCollectible food in foods)
         {

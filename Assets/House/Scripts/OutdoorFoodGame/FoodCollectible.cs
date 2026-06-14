@@ -30,6 +30,7 @@ public class FoodCollectible : MonoBehaviour
     private Coroutine returnRoutine;
     private bool returnRoutineChangedKinematic;
     private bool returnRoutinePreviousKinematic;
+    private bool hasCachedStartPose;
 
     private void Awake()
     {
@@ -61,6 +62,7 @@ public class FoodCollectible : MonoBehaviour
         startParent = transform.parent;
         startPosition = transform.position;
         startRotation = transform.rotation;
+        hasCachedStartPose = true;
     }
 
     public void MarkDelivered()
@@ -83,6 +85,9 @@ public class FoodCollectible : MonoBehaviour
 
     public void ResetToStart()
     {
+        if (!hasCachedStartPose)
+            CacheStartPose();
+
         IsDelivered = false;
         IsHeld = false;
 

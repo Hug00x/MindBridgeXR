@@ -14,6 +14,13 @@ public class MemoryMiniGame3DController : MonoBehaviour
     [SerializeField] private float mismatchHideDelay = 1f;
     [SerializeField] private float previewDuration = 2f;
 
+    [Header("Audio")]
+    [SerializeField] private AudioSource audioSource;
+    [SerializeField] private AudioClip correctPairClip;
+    [SerializeField] private AudioClip wrongPairClip;
+    [SerializeField, Range(0f, 1f)] private float audioVolume = 1f;
+    [SerializeField] private float pairFeedbackAudioDelay = 0.12f;
+
     private MemoryCard3D firstCard;
     private MemoryCard3D secondCard;
     private bool inputLocked;
@@ -26,6 +33,9 @@ public class MemoryMiniGame3DController : MonoBehaviour
 
     private void Awake()
     {
+        if (audioSource == null)
+            audioSource = GetComponent<AudioSource>();
+
         foreach (MemoryCard3D card in cards)
         {
             if (card != null)
@@ -74,6 +84,8 @@ public class MemoryMiniGame3DController : MonoBehaviour
             if (card != null)
             {
                 card.gameObject.SetActive(true);
+                SetCardInteractionEnabled(card, true);
+                card.ResetCard();
                 card.SetInstantReveal(true);
                 card.CacheBasePose();
             }
@@ -134,13 +146,18 @@ public class MemoryMiniGame3DController : MonoBehaviour
         {
             bool isMatch = string.Equals(firstCard.PairID, secondCard.PairID, StringComparison.Ordinal);
 
+            if (pairFeedbackAudioDelay > 0f)
+                yield return new WaitForSeconds(pairFeedbackAudioDelay);
+
             if (isMatch)
             {
                 firstCard.SetMatched();
                 secondCard.SetMatched();
+                PlayOneShot(correctPairClip);
             }
             else
             {
+                PlayOneShot(wrongPairClip);
                 yield return new WaitForSeconds(mismatchHideDelay);
                 firstCard.Hide();
                 secondCard.Hide();
@@ -241,5 +258,23 @@ public class MemoryMiniGame3DController : MonoBehaviour
     {
         GameObject target = boardRoot != null ? boardRoot : gameObject;
         target.SetActive(visible);
+    }
+
+    private void SetCardInteractionEnabled(MemoryCard3D card, bool enabled)
+    {
+        if (card == null)
+            return;
+
+        UnityEngine.XR.Interaction.Toolkit.Interactables.XRSimpleInteractable interactable =
+            card.GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactables.XRSimpleInteractable>();
+
+        if (interactable != null)
+            interactable.enabled = enabled;
+    }
+
+    private void PlayOneShot(AudioClip clip)
+    {
+        if (audioSource != null && clip != null)
+            audioSource.PlayOneShot(clip, audioVolume);
     }
 }

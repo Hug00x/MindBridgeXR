@@ -21,9 +21,9 @@ public class DiningMemoryPhaseController : MonoBehaviour
     [SerializeField] private DiningTableZone diningTableZone;
     [SerializeField] private MemoryMiniGame3DController memoryGameController;
 
-    [Header("UI")]
-    [SerializeField] private TextMeshProUGUI taskText;
-    [SerializeField] private TextMeshProUGUI centerMessageText;
+    [Header("Task Text")]
+    [SerializeField] private TMP_Text taskText;
+    [SerializeField] private TMP_Text centerMessageText;
     [SerializeField] private float centerMessageDuration = 2.5f;
 
     [Header("Mensagens")]
@@ -38,7 +38,7 @@ public class DiningMemoryPhaseController : MonoBehaviour
 
     private void OnEnable()
     {
-        ResolveMemoryController();
+        ResolveReferences();
         SubscribeEvents();
         HideCenterMessage();
     }
@@ -53,10 +53,12 @@ public class DiningMemoryPhaseController : MonoBehaviour
         if (IsRunning)
             return;
 
+        UnsubscribeEvents();
+        ResolveReferences();
+        SubscribeEvents();
+
         if (diningTableZone != null)
             diningTableZone.ResetZone();
-
-        EnsureMemoryControllerReference();
 
         ChangeState(DiningPhaseState.GoToDiningRoom);
     }
@@ -75,10 +77,10 @@ public class DiningMemoryPhaseController : MonoBehaviour
 
     private void SubscribeEvents()
     {
+        ResolveReferences();
+
         if (diningTableZone != null)
             diningTableZone.PlayerArrived += OnPlayerArrivedAtTable;
-
-        EnsureMemoryControllerReference();
 
         if (memoryGameController != null)
             memoryGameController.RoundCompleted += OnMemoryRoundCompleted;
@@ -135,11 +137,19 @@ public class DiningMemoryPhaseController : MonoBehaviour
         }
     }
 
-    private void ResolveMemoryController()
+    private void ResolveReferences()
     {
+        if (diningTableZone == null)
+        {
+            diningTableZone = FindFirstObjectByType<DiningTableZone>(FindObjectsInactive.Include);
+
+            if (diningTableZone == null)
+                Debug.LogWarning("DiningTableZone nao encontrada na cena.");
+        }
+
         if (memoryGameController == null)
         {
-            memoryGameController = FindFirstObjectByType<MemoryMiniGame3DController>(FindObjectsInactive.Exclude);
+            memoryGameController = FindFirstObjectByType<MemoryMiniGame3DController>(FindObjectsInactive.Include);
 
             if (memoryGameController == null)
                 Debug.LogWarning("MemoryMiniGame3DController não encontrado na cena.");
@@ -149,7 +159,7 @@ public class DiningMemoryPhaseController : MonoBehaviour
     private void EnsureMemoryControllerReference()
     {
         if (memoryGameController == null)
-            ResolveMemoryController();
+            ResolveReferences();
     }
 
     private void SetTask(string message)
