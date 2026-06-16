@@ -1,7 +1,5 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using TMPro;
 using UnityEngine;
 
 public class OutdoorFoodPhaseController : MonoBehaviour
@@ -42,21 +40,6 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     [SerializeField] private GameObject listArrowIndicator;
     [SerializeField] private GameObject tableHighlight;
 
-    [Header("Task Text")]
-    [SerializeField] private TMP_Text taskText;
-    [SerializeField] private TMP_Text centerMessageText;
-    [SerializeField] private float centerMessageDuration = 2.5f;
-
-    [Header("Messages")]
-    [SerializeField] private string goToExteriorTask = "Fase 4: Vai ate ao exterior.";
-    [SerializeField] private string findListTask = "Fase 4: Pega na lista de alimentos.";
-    [SerializeField] private string deliverFoodTask = "Fase 4: Coloca na mesa os alimentos pedidos.";
-    [SerializeField] private string completionTask = "Fase 4 concluida";
-    [SerializeField] private string enteredExteriorMessage = "Prepara a mesa com os alimentos da lista.";
-    [SerializeField] private string findListMessage = "Pega na lista para veres o pedido.";
-    [SerializeField] private string listPickedMessage = "Boa. Agora coloca os alimentos pedidos na mesa.";
-    [SerializeField] private string completionMessage = "Excelente! Preparaste a mesa.";
-
     [Header("Audio")]
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private AudioClip acceptedClip;
@@ -76,7 +59,6 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     };
 
     private OutdoorFoodPhaseState state = OutdoorFoodPhaseState.Inactive;
-    private Coroutine centerMessageRoutine;
     private static readonly Dictionary<FoodType, int> savedDeliveredCounts = new Dictionary<FoodType, int>();
     private static OutdoorFoodPhaseState savedState = OutdoorFoodPhaseState.Inactive;
     private static bool hasSavedProgress = false;
@@ -90,7 +72,6 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     {
         ResolveReferences();
         SubscribeEvents();
-        HideCenterMessage();
 
         if (TaskManager.Instance != null)
             TaskManager.Instance.RegisterOutdoorFoodPhaseController(this);
@@ -154,7 +135,6 @@ public class OutdoorFoodPhaseController : MonoBehaviour
 
         if (state == OutdoorFoodPhaseState.GoToExterior || state == OutdoorFoodPhaseState.FindFoodList)
         {
-            ShowCenterMessage("Pega primeiro na lista.");
             PlayOneShot(rejectedClip);
             return FoodDeliveryResult.RejectedReturnToStart;
         }
@@ -166,24 +146,19 @@ public class OutdoorFoodPhaseController : MonoBehaviour
 
         if (requirement == null)
         {
-            ShowCenterMessage("Esse alimento nao esta na lista.");
             PlayOneShot(rejectedClip);
             return FoodDeliveryResult.RejectedReturnToStart;
         }
 
         if (requirement.deliveredCount >= requirement.requiredCount)
         {
-            ShowCenterMessage("Ja tens " + requirement.displayName + " suficientes.");
             PlayOneShot(rejectedClip);
             return FoodDeliveryResult.RejectedReturnToStart;
         }
 
         requirement.deliveredCount++;
         SaveProgress();
-        ShowCenterMessage(requirement.displayName + " adicionada (" +
-                          requirement.deliveredCount + "/" + requirement.requiredCount + ")");
         PlayOneShot(acceptedClip);
-        SetTask(BuildProgressTask());
 
         if (IsComplete())
             CompletePhase();
@@ -223,27 +198,21 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         switch (state)
         {
             case OutdoorFoodPhaseState.GoToExterior:
-                SetTask(goToExteriorTask);
                 SetListArrowVisible(false);
                 SetTableHighlightVisible(false);
                 break;
 
             case OutdoorFoodPhaseState.FindFoodList:
-                SetTask(findListTask);
                 SetListArrowVisible(true);
                 SetTableHighlightVisible(false);
-                ShowCenterMessage(enteredExteriorMessage + " " + findListMessage);
                 break;
 
             case OutdoorFoodPhaseState.DeliverFood:
-                SetTask(BuildProgressTask());
                 SetListArrowVisible(false);
                 SetTableHighlightVisible(true);
-                ShowCenterMessage(listPickedMessage);
                 break;
 
             case OutdoorFoodPhaseState.Completed:
-                SetTask(completionTask);
                 SetListArrowVisible(false);
                 SetTableHighlightVisible(false);
                 break;
@@ -254,10 +223,8 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     {
         state = OutdoorFoodPhaseState.Completed;
         SaveProgress();
-        SetTask(completionTask);
         SetListArrowVisible(false);
         SetTableHighlightVisible(false);
-        ShowCenterMessage(completionMessage);
         PlayOneShot(completionClip);
         PhaseCompleted?.Invoke();
     }
@@ -380,43 +347,6 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         return true;
     }
 
-    private int GetDeliveredTotal()
-    {
-        int total = 0;
-
-        foreach (FoodRequirement requirement in requirements)
-        {
-            if (requirement != null)
-                total += requirement.deliveredCount;
-        }
-
-        return total;
-    }
-
-    private int GetRequiredTotal()
-    {
-        int total = 0;
-
-        foreach (FoodRequirement requirement in requirements)
-        {
-            if (requirement != null)
-                total += requirement.requiredCount;
-        }
-
-        return total;
-    }
-
-    private string BuildProgressTask()
-    {
-        return deliverFoodTask + " (" + GetDeliveredTotal() + "/" + GetRequiredTotal() + ")";
-    }
-
-    private void SetTask(string message)
-    {
-        if (taskText != null)
-            taskText.text = message;
-    }
-
     private void SetListArrowVisible(bool visible)
     {
         if (listArrowIndicator != null)
@@ -430,37 +360,6 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     {
         if (tableHighlight != null)
             tableHighlight.SetActive(visible);
-    }
-
-    private void ShowCenterMessage(string message)
-    {
-        if (centerMessageText == null || string.IsNullOrWhiteSpace(message))
-            return;
-
-        if (centerMessageRoutine != null)
-            StopCoroutine(centerMessageRoutine);
-
-        centerMessageRoutine = StartCoroutine(CenterMessageRoutine(message));
-    }
-
-    private IEnumerator CenterMessageRoutine(string message)
-    {
-        centerMessageText.gameObject.SetActive(true);
-        centerMessageText.text = message;
-
-        yield return new WaitForSeconds(centerMessageDuration);
-
-        HideCenterMessage();
-        centerMessageRoutine = null;
-    }
-
-    private void HideCenterMessage()
-    {
-        if (centerMessageText == null)
-            return;
-
-        centerMessageText.text = string.Empty;
-        centerMessageText.gameObject.SetActive(false);
     }
 
     private void PlayOneShot(AudioClip clip)

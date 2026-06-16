@@ -21,8 +21,6 @@ public class SceneTransitionTrigger : MonoBehaviour
             other.GetComponentInParent<CharacterController>() != null ||
             (other.transform.root != null && other.transform.root.CompareTag(playerTag));
 
-        Debug.Log("Trigger tocado por: " + other.name + " | Tag: " + other.tag + " | isPlayer=" + isPlayer);
-
         if (!isPlayer)
             return;
 
@@ -34,13 +32,11 @@ public class SceneTransitionTrigger : MonoBehaviour
 
         if (SceneTransitionManager.Instance.IsTransitioning)
         {
-            Debug.Log("Transição ignorada porque já está outra em curso.");
             return;
         }
 
         canTrigger = false;
 
-        Debug.Log("A carregar cena: " + sceneToLoad + " | spawnID: " + destinationSpawnID);
         SceneTransitionManager.Instance.TransitionToScene(sceneToLoad, destinationSpawnID);
     }
 

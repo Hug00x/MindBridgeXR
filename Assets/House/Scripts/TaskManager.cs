@@ -27,33 +27,14 @@ public class TaskManager : MonoBehaviour
     [Header("Lista global de todas as divisões")]
     [SerializeField] private GlobalRoomData[] allRooms;
 
-    [Header("Task Text")]
-    [SerializeField] private TMP_Text currentRoomText;
-    [SerializeField] private TMP_Text taskText;
-
-    [Header("Center Text (Fase 1)")]
-    [SerializeField] private TMP_Text centerMessageText;
-    [SerializeField] private float roomNameDisplayDuration = 3.5f;
-    [SerializeField] private float tutorialCompletionMessageDuration = 3f;
-    [SerializeField] private string tutorialCompletionMessage = "Bom trabalho!";
-
-    [Header("Textos de introducao das fases")]
+    [Header("Textos de introdução das fases")]
     [SerializeField] private GameObject phase1TextsRoot;
-    [SerializeField] private string phase1TextsRootName = "TextsFase1";
-    [SerializeField] private string alternatePhase1TextsRootName = "Texts1Fase";
-    [SerializeField] private string[] additionalPhase1TextsRootNames = { "TextFase1", "textfase1" };
     [SerializeField] private GameObject phase2TextsRoot;
-    [SerializeField] private string phase2TextsRootName = "TextsFase2";
-    [SerializeField] private string[] additionalPhase2TextsRootNames = { "TextFase2", "textfase2" };
     [SerializeField] private TMP_Text phase2TaskListText;
     [SerializeField] private string phase2TaskListTextName = "Phase2TaskListText";
     [SerializeField] private string phase2TaskListHeader = "Fase 2 - Encontrar divisões\n\nSegue as instruções e vai até as divisões indicadas.";
     [SerializeField] private GameObject phase3TextsRoot;
-    [SerializeField] private string phase3TextsRootName = "TextsFase3";
-    [SerializeField] private string[] additionalPhase3TextsRootNames = { "TextFase3", "textfase3" };
     [SerializeField] private GameObject phase4TextsRoot;
-    [SerializeField] private string phase4TextsRootName = "TextsFase4";
-    [SerializeField] private string[] additionalPhase4TextsRootNames = { "TextFase4", "textfase4" };
 
     [Header("Fim da Fase 1")]
     [SerializeField] private string initialSceneName;
@@ -68,20 +49,16 @@ public class TaskManager : MonoBehaviour
     [SerializeField] private string phase3CompletionMessage = "Fase 3 concluída!\n\nCompletaste o jogo da memória.";
     [SerializeField] private string phase4CompletionMessage = "Fase 4 concluída!\n\nObrigado por participares na experiência.\n\nJá podes retirar os óculos.";
 
-    [Header("Fase 3 - Memoria na Sala de Jantar")]
+    [Header("Fase 3 - Memória na Sala de Jantar")]
     [SerializeField] private bool startDiningMemoryPhaseAfterPhase2 = true;
     [SerializeField] private DiningMemoryPhaseController diningMemoryPhaseController;
     [SerializeField] private float guidedCompletionDisplaySeconds = 2.5f;
-    [SerializeField] private string guidedCompletionNextMessage = "Vai ate a mesa na sala de jantar para jogar o jogo da memória.";
-    [SerializeField] private string diningMemoryStartTask = "Fase 3: Vai ate a sala de jantar e joga uma ronda do jogo da memória.";
     [SerializeField] private float guidedTaskStartGraceSeconds = 1.25f;
 
     [Header("Fase 4 - Alimentos no Exterior")]
     [SerializeField] private bool startOutdoorFoodPhaseAfterMemory = true;
     [SerializeField] private OutdoorFoodPhaseController outdoorFoodPhaseController;
     [SerializeField] private float memoryCompletionToOutdoorDelay = 2.5f;
-    [SerializeField] private string outdoorFoodStartTask = "Fase 4: Vai ate ao exterior.";
-    [SerializeField] private string outdoorFoodCompletedTask = "Fase 4 concluida";
 
     [Header("Definições")]
     [SerializeField] private bool shuffleTaskOrder = true;
@@ -89,9 +66,12 @@ public class TaskManager : MonoBehaviour
 
     private RoomZone[] rooms;
     private string currentRoomID;
-    private string currentRoomName;
     private GlobalRoomData targetRoomData;
     private GamePhase currentPhase = GamePhase.TutorialExploration;
+    private const string Phase1TextsRootName = "Texts1Fase";
+    private const string Phase2TextsRootName = "Texts2Fase";
+    private const string Phase3TextsRootName = "Texts3Fase";
+    private const string Phase4TextsRootName = "Texts4Fase";
 
     private readonly HashSet<string> allRoomIDs = new HashSet<string>();
     private readonly HashSet<string> visitedRoomIDs = new HashSet<string>();
@@ -101,7 +81,6 @@ public class TaskManager : MonoBehaviour
     private int totalTaskCount = 0;
     private bool allTasksCompleted = false;
     private bool tutorialEndSequenceRunning = false;
-    private Coroutine centerMessageRoutine;
     private Coroutine guidedCompletionRoutine;
     private Coroutine outdoorFoodStartRoutine;
     private bool diningMemoryPhaseStarted = false;
@@ -129,10 +108,7 @@ public class TaskManager : MonoBehaviour
         BuildGlobalRoomCatalog();
         EnsureDiningMemoryControllerReference();
         EnsureOutdoorFoodControllerReference();
-        UpdateCurrentRoomUI();
-        HideCenterMessage();
         RefreshPhaseTextsVisibility();
-        UpdateTaskUI();
     }
 
     private void OnDestroy()
@@ -154,11 +130,8 @@ public class TaskManager : MonoBehaviour
         else
             ClearAllVisitedMarksInCurrentScene();
 
-        Debug.Log("TaskManager recebeu " + rooms.Length + " divisões da nova cena.");
-
         if (currentPhase == GamePhase.TutorialExploration)
         {
-            UpdateTaskUI();
             return;
         }
 
@@ -175,7 +148,6 @@ public class TaskManager : MonoBehaviour
             if (diningMemoryPhaseStarted)
                 return;
 
-            UpdateTaskUI();
             return;
         }
 
@@ -186,7 +158,6 @@ public class TaskManager : MonoBehaviour
         }
 
         HighlightTargetIfPresentInCurrentScene();
-        UpdateTaskUI();
     }
 
     public void PlayerEnteredRoom(RoomZone room)
@@ -195,11 +166,6 @@ public class TaskManager : MonoBehaviour
             return;
 
         currentRoomID = room.roomID;
-        currentRoomName = room.roomName;
-
-        UpdateCurrentRoomUI();
-
-        Debug.Log("Entraste em: " + room.roomName + " | roomID=" + room.roomID);
 
         if (diningMemoryPhaseStarted && !diningMemoryPhaseCompleted)
         {
@@ -213,13 +179,10 @@ public class TaskManager : MonoBehaviour
             EnsureOutdoorFoodControllerReference();
             if (outdoorFoodPhaseController != null)
                 outdoorFoodPhaseController.NotifyPlayerEnteredRoom(room.roomID);
-            else if (taskText != null)
-                taskText.text = outdoorFoodStartTask;
         }
 
         if (currentPhase == GamePhase.TutorialExploration)
         {
-            ShowRoomNameInCenterTemporarily(room.roomName);
             HandleTutorialRoomVisit(room);
             return;
         }
@@ -234,8 +197,6 @@ public class TaskManager : MonoBehaviour
         {
             if (Time.time < guidedTasksBlockedUntil)
                 return;
-
-            Debug.Log("Tarefa concluída! Chegaste a: " + targetRoomData.roomName);
 
             currentTaskIndex++;
             SetNextTaskFromList();
@@ -260,7 +221,6 @@ public class TaskManager : MonoBehaviour
             allRoomIDs.Add(room.roomID);
         }
 
-        Debug.Log("Total de divisões globais para tutorial: " + allRoomIDs.Count);
     }
 
     private void HandleTutorialRoomVisit(RoomZone room)
@@ -274,38 +234,18 @@ public class TaskManager : MonoBehaviour
         bool isNewVisit = visitedRoomIDs.Add(room.roomID);
 
         if (isNewVisit)
-        {
-            room.SetVisitedMark(true);
-            Debug.Log("Tutorial: nova divisão visitada -> " + room.roomName +
-                      " | progresso=" + visitedRoomIDs.Count + "/" + allRoomIDs.Count);
-        }
-
-        UpdateTaskUI();
+            SetVisitedMarkForRoomIDInCurrentScene(room.roomID, true);
 
         if (allRoomIDs.Count > 0 && visitedRoomIDs.Count >= allRoomIDs.Count)
         {
-            StartCoroutine(FinishTutorialThenStartPhase2(room.roomName));
+            StartCoroutine(FinishTutorialThenStartPhase2());
             return;
         }
     }
 
-    private IEnumerator FinishTutorialThenStartPhase2(string lastRoomName)
+    private IEnumerator FinishTutorialThenStartPhase2()
     {
         tutorialEndSequenceRunning = true;
-
-        if (!string.IsNullOrWhiteSpace(lastRoomName))
-        {
-            SetCenterMessage(lastRoomName);
-            yield return new WaitForSeconds(roomNameDisplayDuration);
-        }
-
-        if (!string.IsNullOrWhiteSpace(tutorialCompletionMessage))
-        {
-            SetCenterMessage(tutorialCompletionMessage);
-            yield return new WaitForSeconds(tutorialCompletionMessageDuration);
-        }
-
-        HideCenterMessage();
         ClearAllVisitedMarksInCurrentScene();
 
         StartGuidedNavigationPhase();
@@ -321,7 +261,6 @@ public class TaskManager : MonoBehaviour
         currentPhase = GamePhase.GuidedNavigation;
         guidedTasksBlockedUntil = Time.time + Mathf.Max(0f, guidedTaskStartGraceSeconds);
         RefreshPhaseTextsVisibility();
-        Debug.Log("Tutorial concluído. A iniciar Fase 2 (navegação orientada).");
         BuildTaskList();
     }
 
@@ -357,7 +296,6 @@ public class TaskManager : MonoBehaviour
                 yield return null;
         }
 
-        Debug.Log("A regressar ao início da experiência: cena=" + sceneToLoad + " | spawn=" + initialSpawnID);
         SceneTransitionManager.Instance.TransitionToScene(
             sceneToLoad,
             initialSpawnID,
@@ -386,7 +324,6 @@ public class TaskManager : MonoBehaviour
         if (allRooms == null || allRooms.Length == 0)
         {
             Debug.LogWarning("A lista global allRooms está vazia.");
-            UpdateTaskUI();
             return;
         }
 
@@ -415,13 +352,6 @@ public class TaskManager : MonoBehaviour
         }
 
         totalTaskCount = taskOrder.Count;
-
-        Debug.Log("Total de tarefas nesta ronda: " + totalTaskCount);
-
-        for (int i = 0; i < taskOrder.Count; i++)
-        {
-            Debug.Log("Ordem[" + i + "] = " + taskOrder[i].roomName + " | cena=" + taskOrder[i].sceneName);
-        }
 
         UpdatePhase2TaskListText();
         SetNextTaskFromList();
@@ -454,6 +384,21 @@ public class TaskManager : MonoBehaviour
         }
     }
 
+    private void SetVisitedMarkForRoomIDInCurrentScene(string roomID, bool state)
+    {
+        if (rooms == null || string.IsNullOrWhiteSpace(roomID))
+            return;
+
+        foreach (RoomZone room in rooms)
+        {
+            if (room == null)
+                continue;
+
+            if (room.roomID == roomID)
+                room.SetVisitedMark(state);
+        }
+    }
+
     private void SetNextTaskFromList()
     {
         ClearAllHighlights();
@@ -463,7 +408,6 @@ public class TaskManager : MonoBehaviour
             targetRoomData = null;
             allTasksCompleted = true;
             UpdatePhase2TaskListText();
-            UpdateTaskUI();
             return;
         }
 
@@ -479,12 +423,7 @@ public class TaskManager : MonoBehaviour
 
                 HighlightTargetIfPresentInCurrentScene();
                 UpdatePhase2TaskListText();
-                UpdateTaskUI();
 
-                Debug.Log("Nova tarefa: Vai para " + targetRoomData.roomName +
-                          " | scene=" + targetRoomData.sceneName +
-                          " | roomID=" + targetRoomData.roomID +
-                          " | progresso=" + currentTaskIndex + "/" + totalTaskCount);
                 return;
             }
 
@@ -494,8 +433,6 @@ public class TaskManager : MonoBehaviour
         targetRoomData = null;
         allTasksCompleted = true;
         UpdatePhase2TaskListText();
-        Debug.Log("Todas as tarefas foram concluídas.");
-
         if (guidedCompletionRoutine != null)
             StopCoroutine(guidedCompletionRoutine);
 
@@ -504,37 +441,21 @@ public class TaskManager : MonoBehaviour
 
     private IEnumerator CompleteGuidedPhaseThenStartNext()
     {
-        if (taskText != null)
-            taskText.text = "Tarefa concluída";
-
-        if (!string.IsNullOrWhiteSpace(guidedCompletionNextMessage) && taskText != null)
-        {
-            yield return new WaitForSeconds(0.2f);
-            taskText.text = guidedCompletionNextMessage;
-        }
-
         if (guidedCompletionDisplaySeconds > 0f)
             yield return new WaitForSeconds(guidedCompletionDisplaySeconds);
 
         bool shouldStartDiningPhase = startDiningMemoryPhaseAfterPhase2 && !diningMemoryPhaseStarted;
 
-        if (shouldStartDiningPhase && !string.IsNullOrWhiteSpace(diningMemoryStartTask) && taskText != null)
-            taskText.text = diningMemoryStartTask;
-
         if (shouldStartDiningPhase)
         {
             yield return StartCoroutine(ReturnToInitialSpawnThen(phase2CompletionMessage, () =>
             {
-                bool startedDiningPhase = TryStartDiningMemoryPhase();
-                if (!startedDiningPhase)
-                    UpdateTaskUI();
+                TryStartDiningMemoryPhase();
             }));
         }
         else
         {
-            bool startedDiningPhase = TryStartDiningMemoryPhase();
-            if (!startedDiningPhase)
-                UpdateTaskUI();
+            TryStartDiningMemoryPhase();
         }
 
         guidedCompletionRoutine = null;
@@ -664,9 +585,6 @@ public class TaskManager : MonoBehaviour
         if (memoryCompletionToOutdoorDelay > 0f)
             yield return new WaitForSeconds(memoryCompletionToOutdoorDelay);
 
-        if (!string.IsNullOrWhiteSpace(outdoorFoodStartTask) && taskText != null)
-            taskText.text = outdoorFoodStartTask;
-
         yield return StartCoroutine(ReturnToInitialSpawnThen(phase3CompletionMessage, () => TryStartOutdoorFoodPhase()));
         outdoorFoodStartRoutine = null;
     }
@@ -691,10 +609,6 @@ public class TaskManager : MonoBehaviour
         {
             outdoorFoodPhaseController.BeginPhase(false, true);
         }
-        else if (taskText != null)
-        {
-            taskText.text = outdoorFoodStartTask;
-        }
 
         return true;
     }
@@ -704,9 +618,6 @@ public class TaskManager : MonoBehaviour
         outdoorFoodPhaseCompleted = true;
         currentPhase = GamePhase.OutdoorFood;
         RefreshPhaseTextsVisibility();
-
-        if (taskText != null)
-            taskText.text = outdoorFoodCompletedTask;
 
         if (SceneTransitionManager.Instance != null)
             SceneTransitionManager.Instance.ShowFinalMessage(phase4CompletionMessage, phaseCompletionMessageHoldSeconds);
@@ -739,92 +650,6 @@ public class TaskManager : MonoBehaviour
         }
     }
 
-    private void UpdateCurrentRoomUI()
-    {
-        if (currentRoomText == null)
-            return;
-
-        currentRoomText.text = string.Empty;
-
-        if (currentRoomText.gameObject.activeSelf)
-            currentRoomText.gameObject.SetActive(false);
-    }
-
-    private void UpdateTaskUI()
-    {
-        if (taskText == null)
-            return;
-
-        if (outdoorFoodPhaseStarted)
-            return;
-
-        if (diningMemoryPhaseStarted)
-            return;
-
-        if (currentPhase == GamePhase.TutorialExploration)
-        {
-            int totalRooms = allRoomIDs.Count;
-            int visitedRooms = visitedRoomIDs.Count;
-            taskText.text = "Tutorial (" + visitedRooms + "/" + totalRooms + "): Explora e visita todas as divisões";
-            return;
-        }
-
-        if (allTasksCompleted)
-        {
-            taskText.text = "Tarefa concluída";
-            return;
-        }
-
-        if (targetRoomData != null)
-        {
-            taskText.text = "Tarefa (" + (currentTaskIndex + 1) + "/" + totalTaskCount + "): Vai para " + targetRoomData.roomName;
-        }
-        else
-        {
-            taskText.text = "Tarefa: -";
-        }
-    }
-
-    private void ShowRoomNameInCenterTemporarily(string roomName)
-    {
-        if (tutorialEndSequenceRunning || string.IsNullOrWhiteSpace(roomName))
-            return;
-
-        if (centerMessageRoutine != null)
-            StopCoroutine(centerMessageRoutine);
-
-        centerMessageRoutine = StartCoroutine(CenterMessageRoutine(roomName, roomNameDisplayDuration));
-    }
-
-    private IEnumerator CenterMessageRoutine(string message, float duration)
-    {
-        SetCenterMessage(message);
-        yield return new WaitForSeconds(duration);
-
-        if (!tutorialEndSequenceRunning)
-            HideCenterMessage();
-
-        centerMessageRoutine = null;
-    }
-
-    private void SetCenterMessage(string message)
-    {
-        if (centerMessageText == null)
-            return;
-
-        centerMessageText.gameObject.SetActive(true);
-        centerMessageText.text = message;
-    }
-
-    private void HideCenterMessage()
-    {
-        if (centerMessageText == null)
-            return;
-
-        centerMessageText.text = string.Empty;
-        centerMessageText.gameObject.SetActive(false);
-    }
-
     private void RefreshPhaseTextsVisibility()
     {
         ResolvePhaseTextRoots();
@@ -840,39 +665,16 @@ public class TaskManager : MonoBehaviour
     private void ResolvePhaseTextRoots()
     {
         if (phase1TextsRoot == null)
-            phase1TextsRoot = FindGameObjectByNameIncludingInactive(phase1TextsRootName);
-
-        if (phase1TextsRoot == null)
-            phase1TextsRoot = FindGameObjectByNameIncludingInactive(alternatePhase1TextsRootName);
-
-        if (phase1TextsRoot == null && additionalPhase1TextsRootNames != null)
-        {
-            foreach (string rootName in additionalPhase1TextsRootNames)
-            {
-                phase1TextsRoot = FindGameObjectByNameIncludingInactive(rootName);
-
-                if (phase1TextsRoot != null)
-                    break;
-            }
-        }
+            phase1TextsRoot = FindGameObjectByNameIncludingInactive(Phase1TextsRootName);
 
         if (phase2TextsRoot == null)
-            phase2TextsRoot = FindGameObjectByNameIncludingInactive(phase2TextsRootName);
-
-        if (phase2TextsRoot == null)
-            phase2TextsRoot = FindFirstGameObjectByNameIncludingInactive(additionalPhase2TextsRootNames);
+            phase2TextsRoot = FindGameObjectByNameIncludingInactive(Phase2TextsRootName);
 
         if (phase3TextsRoot == null)
-            phase3TextsRoot = FindGameObjectByNameIncludingInactive(phase3TextsRootName);
-
-        if (phase3TextsRoot == null)
-            phase3TextsRoot = FindFirstGameObjectByNameIncludingInactive(additionalPhase3TextsRootNames);
+            phase3TextsRoot = FindGameObjectByNameIncludingInactive(Phase3TextsRootName);
 
         if (phase4TextsRoot == null)
-            phase4TextsRoot = FindGameObjectByNameIncludingInactive(phase4TextsRootName);
-
-        if (phase4TextsRoot == null)
-            phase4TextsRoot = FindFirstGameObjectByNameIncludingInactive(additionalPhase4TextsRootNames);
+            phase4TextsRoot = FindGameObjectByNameIncludingInactive(Phase4TextsRootName);
     }
 
     private void ResolvePhaseTextComponents()
@@ -939,25 +741,8 @@ public class TaskManager : MonoBehaviour
         if (root == null)
             return;
 
-        if (visible)
-            EnsureAncestorsActive(root.transform);
-
         if (root.activeSelf != visible)
             root.SetActive(visible);
-    }
-
-    private void EnsureAncestorsActive(Transform child)
-    {
-        if (child == null)
-            return;
-
-        Transform parent = child.parent;
-
-        if (parent != null)
-            EnsureAncestorsActive(parent);
-
-        if (!child.gameObject.activeSelf)
-            child.gameObject.SetActive(true);
     }
 
     private GameObject FindGameObjectByNameIncludingInactive(string objectName)
@@ -969,24 +754,8 @@ public class TaskManager : MonoBehaviour
 
         foreach (Transform item in transforms)
         {
-            if (item != null && string.Equals(item.gameObject.name, objectName, System.StringComparison.OrdinalIgnoreCase))
+            if (item != null && item.gameObject.name == objectName)
                 return item.gameObject;
-        }
-
-        return null;
-    }
-
-    private GameObject FindFirstGameObjectByNameIncludingInactive(string[] objectNames)
-    {
-        if (objectNames == null)
-            return null;
-
-        foreach (string objectName in objectNames)
-        {
-            GameObject found = FindGameObjectByNameIncludingInactive(objectName);
-
-            if (found != null)
-                return found;
         }
 
         return null;

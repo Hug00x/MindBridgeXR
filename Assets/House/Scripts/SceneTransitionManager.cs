@@ -78,7 +78,6 @@ public class SceneTransitionManager : MonoBehaviour
     {
         isTransitioning = true;
 
-        Debug.Log("Fade out a começar.");
         yield return StartCoroutine(Fade(0f, 1f));
 
         ShowFadeMessage(pendingTransitionMessage);
@@ -86,10 +85,7 @@ public class SceneTransitionManager : MonoBehaviour
         if (!string.IsNullOrWhiteSpace(pendingTransitionMessage) && pendingMessageHoldSeconds > 0f)
             yield return new WaitForSeconds(pendingMessageHoldSeconds);
 
-        Debug.Log("A carregar cena: " + sceneName);
         yield return SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
-
-        Debug.Log("Cena carregada: " + SceneManager.GetActiveScene().name);
 
         // Dá tempo ao XR e à nova cena para assentarem
         yield return null;
@@ -106,7 +102,6 @@ public class SceneTransitionManager : MonoBehaviour
 
         HideFadeMessage();
 
-        Debug.Log("Fade in a começar.");
         yield return StartCoroutine(Fade(1f, 0f));
 
         pendingTransitionMessage = null;
@@ -130,12 +125,9 @@ public class SceneTransitionManager : MonoBehaviour
     private void MovePlayerToSpawnPoint()
     {
         SceneSpawnPoint[] spawnPoints = FindObjectsOfType<SceneSpawnPoint>(true);
-        Debug.Log("Spawn points encontrados: " + spawnPoints.Length);
 
         foreach (SceneSpawnPoint spawnPoint in spawnPoints)
         {
-            Debug.Log("Spawn encontrado com ID: " + spawnPoint.spawnID);
-
             bool matchesSpawnID = spawnPoint.spawnID == pendingSpawnID;
             bool matchesObjectName = spawnPoint.gameObject.name == pendingSpawnID;
 
@@ -184,7 +176,6 @@ public class SceneTransitionManager : MonoBehaviour
                 cc.Move(Vector3.zero);
             }
 
-            Debug.Log("XR Rig reposicionado para spawn: " + pendingSpawnID);
             return;
         }
 
@@ -221,7 +212,6 @@ public class SceneTransitionManager : MonoBehaviour
 
         Physics.SyncTransforms();
 
-        Debug.Log("Estado XR resetado.");
     }
 
     private GameObject FindObjectByName(string objectName)

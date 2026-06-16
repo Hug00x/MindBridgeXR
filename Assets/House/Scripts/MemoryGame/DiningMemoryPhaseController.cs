@@ -1,6 +1,4 @@
 using System;
-using System.Collections;
-using TMPro;
 using UnityEngine;
 
 public class DiningMemoryPhaseController : MonoBehaviour
@@ -21,16 +19,7 @@ public class DiningMemoryPhaseController : MonoBehaviour
     [SerializeField] private DiningTableZone diningTableZone;
     [SerializeField] private MemoryMiniGame3DController memoryGameController;
 
-    [Header("Task Text")]
-    [SerializeField] private TMP_Text taskText;
-    [SerializeField] private TMP_Text centerMessageText;
-    [SerializeField] private float centerMessageDuration = 2.5f;
-
-    [Header("Mensagens")]
-    [SerializeField] private string completionMessage = "Bom trabalho! Concluiste o jogo da memoria.";
-
     private DiningPhaseState state = DiningPhaseState.Inactive;
-    private Coroutine centerMessageRoutine;
 
     public bool IsRunning => state != DiningPhaseState.Inactive && state != DiningPhaseState.Completed;
 
@@ -40,7 +29,6 @@ public class DiningMemoryPhaseController : MonoBehaviour
     {
         ResolveReferences();
         SubscribeEvents();
-        HideCenterMessage();
     }
 
     private void OnDisable()
@@ -71,7 +59,6 @@ public class DiningMemoryPhaseController : MonoBehaviour
         if (!string.Equals(roomID, diningRoomID, StringComparison.OrdinalIgnoreCase))
             return;
 
-        ShowCenterMessage("Sala de jantar");
         ChangeState(DiningPhaseState.GoToTable);
     }
 
@@ -100,7 +87,6 @@ public class DiningMemoryPhaseController : MonoBehaviour
         if (state != DiningPhaseState.GoToTable)
             return;
 
-        ShowCenterMessage("Perfeito. Inicia o jogo de memoria.");
         ChangeState(DiningPhaseState.PlayMemoryGame);
     }
 
@@ -110,8 +96,6 @@ public class DiningMemoryPhaseController : MonoBehaviour
             return;
 
         state = DiningPhaseState.Completed;
-        SetTask("Fase 3 concluida");
-        ShowCenterMessage(completionMessage);
         PhaseCompleted?.Invoke();
     }
 
@@ -122,15 +106,12 @@ public class DiningMemoryPhaseController : MonoBehaviour
         switch (state)
         {
             case DiningPhaseState.GoToDiningRoom:
-                SetTask("Fase 3: Va ate a sala de jantar");
                 break;
 
             case DiningPhaseState.GoToTable:
-                SetTask("Fase 3: Va ate a mesa da sala de jantar");
                 break;
 
             case DiningPhaseState.PlayMemoryGame:
-                SetTask("Fase 3: Jogue uma ronda do jogo de memoria");
                 if (memoryGameController != null)
                     memoryGameController.BeginGame();
                 break;
@@ -160,42 +141,5 @@ public class DiningMemoryPhaseController : MonoBehaviour
     {
         if (memoryGameController == null)
             ResolveReferences();
-    }
-
-    private void SetTask(string message)
-    {
-        if (taskText != null)
-            taskText.text = message;
-    }
-
-    private void ShowCenterMessage(string message)
-    {
-        if (centerMessageText == null || string.IsNullOrWhiteSpace(message))
-            return;
-
-        if (centerMessageRoutine != null)
-            StopCoroutine(centerMessageRoutine);
-
-        centerMessageRoutine = StartCoroutine(CenterMessageRoutine(message));
-    }
-
-    private IEnumerator CenterMessageRoutine(string message)
-    {
-        centerMessageText.gameObject.SetActive(true);
-        centerMessageText.text = message;
-
-        yield return new WaitForSeconds(centerMessageDuration);
-
-        HideCenterMessage();
-        centerMessageRoutine = null;
-    }
-
-    private void HideCenterMessage()
-    {
-        if (centerMessageText == null)
-            return;
-
-        centerMessageText.text = string.Empty;
-        centerMessageText.gameObject.SetActive(false);
     }
 }
