@@ -1,4 +1,5 @@
 using System.Collections;
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -10,7 +11,9 @@ public class SceneTransitionManager : MonoBehaviour
 
     [Header("Fade")]
     [SerializeField] private Image fadeImage;
+    [SerializeField] private TMP_Text fadeMessageText;
     [SerializeField] private float fadeDuration = 1f;
+    [SerializeField] private float defaultMessageHoldSeconds = 2f;
 
     [Header("XR Object Names")]
     [SerializeField] private string xrRigName = "XR Origin (XR Rig)";
@@ -19,6 +22,8 @@ public class SceneTransitionManager : MonoBehaviour
     [SerializeField] private string rightControllerName = "Right Controller";
 
     private string pendingSpawnID;
+    private string pendingTransitionMessage;
+    private float pendingMessageHoldSeconds;
     private bool isTransitioning = false;
     public bool IsTransitioning => isTransitioning;
 
@@ -32,15 +37,41 @@ public class SceneTransitionManager : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
+        HideFadeMessage();
     }
 
     public void TransitionToScene(string sceneName, string spawnID)
+    {
+        TransitionToScene(sceneName, spawnID, null, defaultMessageHoldSeconds);
+    }
+
+    public void TransitionToScene(string sceneName, string spawnID, string transitionMessage)
+    {
+        TransitionToScene(sceneName, spawnID, transitionMessage, defaultMessageHoldSeconds);
+    }
+
+    public void TransitionToScene(string sceneName, string spawnID, string transitionMessage, float messageHoldSeconds)
     {
         if (isTransitioning)
             return;
 
         pendingSpawnID = spawnID;
+        pendingTransitionMessage = transitionMessage;
+        pendingMessageHoldSeconds = Mathf.Max(0f, messageHoldSeconds);
         StartCoroutine(TransitionRoutine(sceneName));
+    }
+
+    public void ShowFinalMessage(string message)
+    {
+        ShowFinalMessage(message, defaultMessageHoldSeconds);
+    }
+
+    public void ShowFinalMessage(string message, float messageHoldSeconds)
+    {
+        if (isTransitioning)
+            return;
+
+        StartCoroutine(FinalMessageRoutine(message, messageHoldSeconds));
     }
 
     private IEnumerator TransitionRoutine(string sceneName)
@@ -49,6 +80,11 @@ public class SceneTransitionManager : MonoBehaviour
 
         Debug.Log("Fade out a começar.");
         yield return StartCoroutine(Fade(0f, 1f));
+
+        ShowFadeMessage(pendingTransitionMessage);
+
+        if (!string.IsNullOrWhiteSpace(pendingTransitionMessage) && pendingMessageHoldSeconds > 0f)
+            yield return new WaitForSeconds(pendingMessageHoldSeconds);
 
         Debug.Log("A carregar cena: " + sceneName);
         yield return SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
@@ -68,8 +104,25 @@ public class SceneTransitionManager : MonoBehaviour
 
         yield return StartCoroutine(ResetXRState());
 
+        HideFadeMessage();
+
         Debug.Log("Fade in a começar.");
         yield return StartCoroutine(Fade(1f, 0f));
+
+        pendingTransitionMessage = null;
+        pendingMessageHoldSeconds = 0f;
+        isTransitioning = false;
+    }
+
+    private IEnumerator FinalMessageRoutine(string message, float messageHoldSeconds)
+    {
+        isTransitioning = true;
+
+        yield return StartCoroutine(Fade(0f, 1f));
+        ShowFadeMessage(message);
+
+        if (messageHoldSeconds > 0f)
+            yield return new WaitForSeconds(messageHoldSeconds);
 
         isTransitioning = false;
     }
@@ -206,5 +259,24 @@ public class SceneTransitionManager : MonoBehaviour
 
         color.a = endAlpha;
         fadeImage.color = color;
+    }
+
+    private void ShowFadeMessage(string message)
+    {
+        if (fadeMessageText == null)
+            return;
+
+        bool hasMessage = !string.IsNullOrWhiteSpace(message);
+        fadeMessageText.text = hasMessage ? message : string.Empty;
+        fadeMessageText.gameObject.SetActive(hasMessage);
+    }
+
+    private void HideFadeMessage()
+    {
+        if (fadeMessageText == null)
+            return;
+
+        fadeMessageText.text = string.Empty;
+        fadeMessageText.gameObject.SetActive(false);
     }
 }

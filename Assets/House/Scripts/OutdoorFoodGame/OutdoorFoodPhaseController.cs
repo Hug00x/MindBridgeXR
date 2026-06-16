@@ -77,6 +77,9 @@ public class OutdoorFoodPhaseController : MonoBehaviour
 
     private OutdoorFoodPhaseState state = OutdoorFoodPhaseState.Inactive;
     private Coroutine centerMessageRoutine;
+    private static readonly Dictionary<FoodType, int> savedDeliveredCounts = new Dictionary<FoodType, int>();
+    private static OutdoorFoodPhaseState savedState = OutdoorFoodPhaseState.Inactive;
+    private static bool hasSavedProgress = false;
 
     public bool IsRunning => state != OutdoorFoodPhaseState.Inactive && state != OutdoorFoodPhaseState.Completed;
     public bool HasListBeenPickedUp => state == OutdoorFoodPhaseState.DeliverFood || state == OutdoorFoodPhaseState.Completed;
@@ -98,16 +101,28 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         UnsubscribeEvents();
     }
 
-    public void BeginPhase(bool playerIsAlreadyInExterior = false)
+    public void BeginPhase(bool playerIsAlreadyInExterior = false, bool resetSavedProgress = true)
     {
         if (IsRunning)
             return;
 
         ResolveReferences();
-        ResetProgress();
+
+        if (resetSavedProgress)
+        {
+            ClearSavedProgress();
+            ResetProgress();
+        }
+        else
+        {
+            RestoreSavedProgress();
+        }
 
         if (resetFoodOnBegin)
             ResetFoodCollectibles();
+
+        if (!resetSavedProgress)
+            HideAlreadyDeliveredFoodsInScene();
 
         if (foodListPickup != null)
             foodListPickup.ResetListPickup(playerIsAlreadyInExterior);
@@ -115,7 +130,10 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         SetListArrowVisible(false);
         SetTableHighlightVisible(false);
 
-        ChangeState(playerIsAlreadyInExterior ? OutdoorFoodPhaseState.FindFoodList : OutdoorFoodPhaseState.GoToExterior);
+        if (!resetSavedProgress && hasSavedProgress && savedState != OutdoorFoodPhaseState.Inactive)
+            ChangeState(savedState);
+        else
+            ChangeState(playerIsAlreadyInExterior ? OutdoorFoodPhaseState.FindFoodList : OutdoorFoodPhaseState.GoToExterior);
     }
 
     public void NotifyPlayerEnteredRoom(string roomID)
@@ -161,6 +179,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         }
 
         requirement.deliveredCount++;
+        SaveProgress();
         ShowCenterMessage(requirement.displayName + " adicionada (" +
                           requirement.deliveredCount + "/" + requirement.requiredCount + ")");
         PlayOneShot(acceptedClip);
@@ -193,11 +212,13 @@ public class OutdoorFoodPhaseController : MonoBehaviour
             return;
 
         ChangeState(OutdoorFoodPhaseState.DeliverFood);
+        SaveProgress();
     }
 
     private void ChangeState(OutdoorFoodPhaseState newState)
     {
         state = newState;
+        SaveProgress();
 
         switch (state)
         {
@@ -232,6 +253,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     private void CompletePhase()
     {
         state = OutdoorFoodPhaseState.Completed;
+        SaveProgress();
         SetTask(completionTask);
         SetListArrowVisible(false);
         SetTableHighlightVisible(false);
@@ -261,6 +283,43 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         }
     }
 
+    private void SaveProgress()
+    {
+        savedDeliveredCounts.Clear();
+
+        foreach (FoodRequirement requirement in requirements)
+        {
+            if (requirement == null)
+                continue;
+
+            savedDeliveredCounts[requirement.foodType] = requirement.deliveredCount;
+        }
+
+        savedState = state;
+        hasSavedProgress = true;
+    }
+
+    private void RestoreSavedProgress()
+    {
+        ResetProgress();
+
+        foreach (FoodRequirement requirement in requirements)
+        {
+            if (requirement == null)
+                continue;
+
+            if (savedDeliveredCounts.TryGetValue(requirement.foodType, out int deliveredCount))
+                requirement.deliveredCount = Mathf.Clamp(deliveredCount, 0, requirement.requiredCount);
+        }
+    }
+
+    private void ClearSavedProgress()
+    {
+        savedDeliveredCounts.Clear();
+        savedState = OutdoorFoodPhaseState.Inactive;
+        hasSavedProgress = false;
+    }
+
     private void ResetFoodCollectibles()
     {
         FoodCollectible[] foods = FindObjectsByType<FoodCollectible>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
@@ -269,6 +328,30 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         {
             if (food != null)
                 food.ResetToStart();
+        }
+    }
+
+    private void HideAlreadyDeliveredFoodsInScene()
+    {
+        FoodCollectible[] foods = FindObjectsByType<FoodCollectible>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        Dictionary<FoodType, int> remainingToHide = new Dictionary<FoodType, int>();
+
+        foreach (FoodRequirement requirement in requirements)
+        {
+            if (requirement != null && requirement.deliveredCount > 0)
+                remainingToHide[requirement.foodType] = requirement.deliveredCount;
+        }
+
+        foreach (FoodCollectible food in foods)
+        {
+            if (food == null)
+                continue;
+
+            if (!remainingToHide.TryGetValue(food.FoodType, out int remainingCount) || remainingCount <= 0)
+                continue;
+
+            food.MarkDelivered();
+            remainingToHide[food.FoodType] = remainingCount - 1;
         }
     }
 
