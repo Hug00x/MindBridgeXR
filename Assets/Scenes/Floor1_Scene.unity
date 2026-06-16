@@ -34629,6 +34629,9 @@ MonoBehaviour:
   - roomID: floor2_bathroom3
     roomName: Casa de banho 3
     sceneName: Floor2_Scene
+  - roomID: exterior_patio
+    roomName: "P\xE1tio"
+    sceneName: Exterior_Scene
   phase1TextsRoot: {fileID: 1385465725}
   phase2TextsRoot: {fileID: 353145884}
   phase2TaskListText: {fileID: 1869623828}
@@ -34640,6 +34643,7 @@ MonoBehaviour:
   initialSceneName: Floor1_Scene
   initialSpawnID: initial_spawnpoint
   returnToInitialSpawnBetweenPhases: 1
+  tutorialCompletionToGuidedDelay: 2.5
   phaseStartDelayAfterTeleport: 0.2
   phaseCompletionMessageHoldSeconds: 5
   phase1CompletionMessage: "Fase 1 conclu\xEDida!\n\nBoa explora\xE7\xE3o."
@@ -35872,9 +35876,9 @@ MonoBehaviour:
   previewDuration: 10
   audioSource: {fileID: 1433215150}
   correctPairClip: {fileID: 8300000, guid: 9b7317e6c47afd1429b71bcc5a210778, type: 3}
-  wrongPairClip: {fileID: 8300000, guid: 827abc9ad9d23e64682e122ab2aacf99, type: 3}
+  wrongPairClip: {fileID: 8300000, guid: 9a2ae3d5250c4e445a36b61b715935e0, type: 3}
   audioVolume: 0.75
-  pairFeedbackAudioDelay: 0.1
+  pairFeedbackAudioDelay: 0.07
 --- !u!114 &1603509843
 MonoBehaviour:
   m_ObjectHideFlags: 0

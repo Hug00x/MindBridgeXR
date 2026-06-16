@@ -7,7 +7,6 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     private enum OutdoorFoodPhaseState
     {
         Inactive,
-        GoToExterior,
         FindFoodList,
         DeliverFood,
         Completed
@@ -31,7 +30,6 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     }
 
     [Header("Objective")]
-    [SerializeField] private string exteriorRoomID = "exterior";
     [SerializeField] private bool resetFoodOnBegin = true;
 
     [Header("Diegetic References")]
@@ -82,7 +80,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         UnsubscribeEvents();
     }
 
-    public void BeginPhase(bool playerIsAlreadyInExterior = false, bool resetSavedProgress = true)
+    public void BeginPhase(bool resetSavedProgress = true)
     {
         if (IsRunning)
             return;
@@ -106,7 +104,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
             HideAlreadyDeliveredFoodsInScene();
 
         if (foodListPickup != null)
-            foodListPickup.ResetListPickup(playerIsAlreadyInExterior);
+            foodListPickup.ResetListPickup(false);
 
         SetListArrowVisible(false);
         SetTableHighlightVisible(false);
@@ -114,18 +112,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         if (!resetSavedProgress && hasSavedProgress && savedState != OutdoorFoodPhaseState.Inactive)
             ChangeState(savedState);
         else
-            ChangeState(playerIsAlreadyInExterior ? OutdoorFoodPhaseState.FindFoodList : OutdoorFoodPhaseState.GoToExterior);
-    }
-
-    public void NotifyPlayerEnteredRoom(string roomID)
-    {
-        if (state != OutdoorFoodPhaseState.GoToExterior)
-            return;
-
-        if (!string.Equals(roomID, exteriorRoomID, StringComparison.OrdinalIgnoreCase))
-            return;
-
-        ChangeState(OutdoorFoodPhaseState.FindFoodList);
+            ChangeState(OutdoorFoodPhaseState.FindFoodList);
     }
 
     public FoodDeliveryResult TryDeliverFood(FoodCollectible food)
@@ -133,7 +120,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         if (food == null || food.IsDelivered)
             return FoodDeliveryResult.Ignored;
 
-        if (state == OutdoorFoodPhaseState.GoToExterior || state == OutdoorFoodPhaseState.FindFoodList)
+        if (state == OutdoorFoodPhaseState.FindFoodList)
         {
             PlayOneShot(rejectedClip);
             return FoodDeliveryResult.RejectedReturnToStart;
@@ -197,11 +184,6 @@ public class OutdoorFoodPhaseController : MonoBehaviour
 
         switch (state)
         {
-            case OutdoorFoodPhaseState.GoToExterior:
-                SetListArrowVisible(false);
-                SetTableHighlightVisible(false);
-                break;
-
             case OutdoorFoodPhaseState.FindFoodList:
                 SetListArrowVisible(true);
                 SetTableHighlightVisible(false);
