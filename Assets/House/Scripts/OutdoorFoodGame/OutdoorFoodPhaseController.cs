@@ -29,6 +29,14 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         }
     }
 
+    [Serializable]
+    public class PlateDisplay
+    {
+        public FoodType foodType;
+        public GameObject visualPrefab;
+        public Transform[] slots;
+    }
+
     [Header("Objective")]
     [SerializeField] private bool resetFoodOnBegin = true;
 
@@ -37,6 +45,10 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     [SerializeField] private FoodDeliveryZone deliveryZone;
     [SerializeField] private GameObject listArrowIndicator;
     [SerializeField] private GameObject tableHighlight;
+
+    [Header("Plate Displays")]
+    [SerializeField] private GameObject plateDisplaysRoot;
+    [SerializeField] private List<PlateDisplay> plateDisplays = new List<PlateDisplay>();
 
     [Header("Audio")]
     [SerializeField] private AudioSource audioSource;
@@ -57,6 +69,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     };
 
     private OutdoorFoodPhaseState state = OutdoorFoodPhaseState.Inactive;
+    private readonly List<GameObject> spawnedPlateVisuals = new List<GameObject>();
     private static readonly Dictionary<FoodType, int> savedDeliveredCounts = new Dictionary<FoodType, int>();
     private static OutdoorFoodPhaseState savedState = OutdoorFoodPhaseState.Inactive;
     private static bool hasSavedProgress = false;
@@ -69,6 +82,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     private void OnEnable()
     {
         ResolveReferences();
+        HidePhaseGuidanceIfInactive();
         SubscribeEvents();
 
         if (TaskManager.Instance != null)
@@ -95,6 +109,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         else
         {
             RestoreSavedProgress();
+            RebuildPlateDisplaysFromProgress();
         }
 
         if (resetFoodOnBegin)
@@ -143,7 +158,9 @@ public class OutdoorFoodPhaseController : MonoBehaviour
             return FoodDeliveryResult.RejectedReturnToStart;
         }
 
+        int plateSlotIndex = requirement.deliveredCount;
         requirement.deliveredCount++;
+        ShowFoodOnPlate(food.FoodType, plateSlotIndex);
         SaveProgress();
         PlayOneShot(acceptedClip);
 
@@ -230,6 +247,8 @@ public class OutdoorFoodPhaseController : MonoBehaviour
             if (requirement != null)
                 requirement.deliveredCount = 0;
         }
+
+        ClearPlateDisplays();
     }
 
     private void SaveProgress()
@@ -259,6 +278,20 @@ public class OutdoorFoodPhaseController : MonoBehaviour
 
             if (savedDeliveredCounts.TryGetValue(requirement.foodType, out int deliveredCount))
                 requirement.deliveredCount = Mathf.Clamp(deliveredCount, 0, requirement.requiredCount);
+        }
+    }
+
+    private void RebuildPlateDisplaysFromProgress()
+    {
+        ClearPlateDisplays();
+
+        foreach (FoodRequirement requirement in requirements)
+        {
+            if (requirement == null)
+                continue;
+
+            for (int i = 0; i < requirement.deliveredCount; i++)
+                ShowFoodOnPlate(requirement.foodType, i);
         }
     }
 
@@ -315,6 +348,65 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         return null;
     }
 
+    private PlateDisplay GetPlateDisplay(FoodType foodType)
+    {
+        foreach (PlateDisplay display in plateDisplays)
+        {
+            if (display != null && display.foodType == foodType)
+                return display;
+        }
+
+        return null;
+    }
+
+    private void ShowFoodOnPlate(FoodType foodType, int slotIndex)
+    {
+        PlateDisplay display = GetPlateDisplay(foodType);
+
+        if (display == null || display.visualPrefab == null || display.slots == null)
+            return;
+
+        if (slotIndex < 0 || slotIndex >= display.slots.Length)
+        {
+            Debug.LogWarning($"No plate slot configured for {foodType} at index {slotIndex}.", this);
+            return;
+        }
+
+        Transform slot = display.slots[slotIndex];
+
+        if (slot == null)
+        {
+            Debug.LogWarning($"Plate slot {slotIndex} for {foodType} is missing.", this);
+            return;
+        }
+
+        GameObject visual = Instantiate(display.visualPrefab, slot);
+        visual.transform.localPosition = Vector3.zero;
+        visual.transform.localRotation = Quaternion.identity;
+        spawnedPlateVisuals.Add(visual);
+
+        if (plateDisplaysRoot != null && !plateDisplaysRoot.activeSelf)
+            plateDisplaysRoot.SetActive(true);
+    }
+
+    private void ClearPlateDisplays()
+    {
+        for (int i = spawnedPlateVisuals.Count - 1; i >= 0; i--)
+        {
+            GameObject visual = spawnedPlateVisuals[i];
+
+            if (visual == null)
+                continue;
+
+            if (Application.isPlaying)
+                Destroy(visual);
+            else
+                DestroyImmediate(visual);
+        }
+
+        spawnedPlateVisuals.Clear();
+    }
+
     private bool IsComplete()
     {
         foreach (FoodRequirement requirement in requirements)
@@ -342,6 +434,15 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     {
         if (tableHighlight != null)
             tableHighlight.SetActive(visible);
+    }
+
+    private void HidePhaseGuidanceIfInactive()
+    {
+        if (state == OutdoorFoodPhaseState.Inactive || state == OutdoorFoodPhaseState.Completed)
+        {
+            SetListArrowVisible(false);
+            SetTableHighlightVisible(false);
+        }
     }
 
     private void PlayOneShot(AudioClip clip)

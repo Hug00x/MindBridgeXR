@@ -18,6 +18,7 @@ public class FoodListPickup : MonoBehaviour
     private void Awake()
     {
         grabInteractable = GetComponent<XRGrabInteractable>();
+        SetArrowVisible(false);
     }
 
     private void OnEnable()
