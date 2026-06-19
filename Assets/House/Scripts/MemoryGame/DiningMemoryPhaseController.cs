@@ -125,17 +125,11 @@ public class DiningMemoryPhaseController : MonoBehaviour
         if (diningTableZone == null)
         {
             diningTableZone = FindFirstObjectByType<DiningTableZone>(FindObjectsInactive.Include);
-
-            if (diningTableZone == null)
-                Debug.LogWarning("DiningTableZone nao encontrada na cena.");
         }
 
         if (memoryGameController == null)
         {
             memoryGameController = FindFirstObjectByType<MemoryMiniGame3DController>(FindObjectsInactive.Include);
-
-            if (memoryGameController == null)
-                Debug.LogWarning("MemoryMiniGame3DController não encontrado na cena.");
         }
     }
 

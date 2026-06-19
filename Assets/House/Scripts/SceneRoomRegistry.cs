@@ -11,9 +11,5 @@ public class SceneRoomRegistry : MonoBehaviour
         {
             TaskManager.Instance.SetSceneRooms(roomsInScene);
         }
-        else
-        {
-            Debug.LogWarning("TaskManager não encontrado na cena.");
-        }
     }
 }

@@ -413,7 +413,6 @@ public class OutdoorFoodPhaseController : MonoBehaviour
 
         if (slotIndex < 0 || slotIndex >= display.slots.Length)
         {
-            Debug.LogWarning($"No plate slot configured for {foodType} at index {slotIndex}.", this);
             return;
         }
 
@@ -421,7 +420,6 @@ public class OutdoorFoodPhaseController : MonoBehaviour
 
         if (slot == null)
         {
-            Debug.LogWarning($"Plate slot {slotIndex} for {foodType} is missing.", this);
             return;
         }
 

@@ -9,6 +9,10 @@ public class FoodListPickup : MonoBehaviour
     [SerializeField] private GameObject arrowIndicator;
     [SerializeField] private bool hideArrowOnPickup = true;
 
+    [Header("Orientação ao pegar")]
+    [Tooltip("Corrige a orientação da folha na mão sem alterar a sua posição na mesa.")]
+    [SerializeField] private Vector3 grabAttachEulerAngles = new Vector3(180f, 0f, 180f);
+
     public bool HasBeenPickedUp { get; private set; }
 
     public event Action PickedUp;
@@ -18,6 +22,7 @@ public class FoodListPickup : MonoBehaviour
     private void Awake()
     {
         grabInteractable = GetComponent<XRGrabInteractable>();
+        EnsureGrabAttachTransform();
     }
 
     private void OnEnable()
@@ -55,5 +60,19 @@ public class FoodListPickup : MonoBehaviour
             SetArrowVisible(false);
 
         PickedUp?.Invoke();
+    }
+
+    private void EnsureGrabAttachTransform()
+    {
+        if (grabInteractable == null || grabInteractable.attachTransform != null)
+            return;
+
+        GameObject attachObject = new GameObject("FoodListGrabAttach");
+        Transform attachTransform = attachObject.transform;
+        attachTransform.SetParent(transform, false);
+        attachTransform.localPosition = Vector3.zero;
+        attachTransform.localRotation = Quaternion.Euler(grabAttachEulerAngles);
+
+        grabInteractable.attachTransform = attachTransform;
     }
 }

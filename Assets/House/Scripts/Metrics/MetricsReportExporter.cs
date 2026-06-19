@@ -102,9 +102,8 @@ public static class MetricsReportExporter
             WriteComparisonCsv(metricsDirectory, sessions);
             WriteSessionReports(metricsDirectory, sessions);
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            Debug.LogError("Não foi possível gerar os relatórios de métricas: " + exception.Message);
         }
     }
 

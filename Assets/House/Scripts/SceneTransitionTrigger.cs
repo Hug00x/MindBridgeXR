@@ -26,7 +26,6 @@ public class SceneTransitionTrigger : MonoBehaviour
 
         if (SceneTransitionManager.Instance == null)
         {
-            Debug.LogWarning("SceneTransitionManager não encontrado.");
             return;
         }
 

@@ -43,11 +43,6 @@ public class MemoryMiniGame3DController : MonoBehaviour
                 card.Selected += OnCardSelected;
         }
 
-        if (boardRoot == gameObject)
-        {
-            Debug.LogWarning("MemoryMiniGame3DController: boardRoot está no mesmo objeto do controlador. Recomenda-se usar um filho dedicado para o board.");
-        }
-
         SetBoardVisible(true);
     }
 
@@ -64,7 +59,6 @@ public class MemoryMiniGame3DController : MonoBehaviour
     {
         if (cards == null || cards.Count < 2)
         {
-            Debug.LogWarning("MemoryMiniGame3D: número insuficiente de cartas.");
             return;
         }
 

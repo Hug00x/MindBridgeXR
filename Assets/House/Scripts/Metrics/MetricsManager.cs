@@ -189,7 +189,6 @@ public class MetricsManager : MonoBehaviour
 
         SaveSummary();
         RebuildCombinedCsv();
-        Debug.Log("Recolha de métricas iniciada. Ficheiro de resumo: " + summaryFilePath);
     }
 
     public void BeginPhase1()
@@ -683,9 +682,6 @@ public class MetricsManager : MonoBehaviour
         PlayerPrefs.Save();
         SaveSummary();
         RebuildCombinedCsv();
-
-        Debug.Log("Métricas guardadas em: " + summaryFilePath);
-        Debug.Log("CSV conjunto atualizado em: " + combinedCsvFilePath);
     }
 
     private void BeginInterruption(string reason)
@@ -962,9 +958,8 @@ public class MetricsManager : MonoBehaviour
         {
             File.AppendAllText(eventsFilePath, JsonUtility.ToJson(record) + Environment.NewLine);
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            Debug.LogError("Não foi possível guardar o evento de métricas: " + exception.Message);
         }
 
         SaveSummary();
@@ -982,9 +977,8 @@ public class MetricsManager : MonoBehaviour
         {
             File.WriteAllText(summaryFilePath, JsonUtility.ToJson(data, true));
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            Debug.LogError("Não foi possível guardar o resumo de métricas: " + exception.Message);
         }
     }
 
@@ -1025,9 +1019,8 @@ public class MetricsManager : MonoBehaviour
             File.WriteAllText(combinedCsvFilePath, csv.ToString(), Encoding.UTF8);
             MetricsReportExporter.RebuildAll(metricsDirectory);
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            Debug.LogError("Não foi possível gerar o CSV conjunto: " + exception.Message);
         }
     }
 

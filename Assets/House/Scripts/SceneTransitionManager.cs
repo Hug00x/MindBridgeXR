@@ -137,7 +137,6 @@ public class SceneTransitionManager : MonoBehaviour
             GameObject xrRigObject = GameObject.FindGameObjectWithTag("Player");
             if (xrRigObject == null)
             {
-                Debug.LogWarning("Jogador com tag Player não encontrado.");
                 return;
             }
 
@@ -146,7 +145,6 @@ public class SceneTransitionManager : MonoBehaviour
 
             if (xrOrigin == null)
             {
-                Debug.LogWarning("XROrigin não encontrado no XR Rig.");
                 return;
             }
 
@@ -179,7 +177,6 @@ public class SceneTransitionManager : MonoBehaviour
             return;
         }
 
-        Debug.LogWarning("Não foi encontrado nenhum SceneSpawnPoint com spawnID = " + pendingSpawnID);
     }
 
     private IEnumerator ResetXRState()
@@ -231,7 +228,6 @@ public class SceneTransitionManager : MonoBehaviour
     {
         if (fadeImage == null)
         {
-            Debug.LogWarning("FadeImage não atribuída no SceneTransitionManager.");
             yield break;
         }
 

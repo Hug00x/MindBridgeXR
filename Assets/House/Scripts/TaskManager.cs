@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public class TaskManager : MonoBehaviour
 {
@@ -35,6 +36,10 @@ public class TaskManager : MonoBehaviour
     [SerializeField] private string phase2TaskListHeader = "Fase 2 - Encontrar divisões\n\nSegue as instruções e vai até as divisões indicadas.";
     [SerializeField] private GameObject phase3TextsRoot;
     [SerializeField] private GameObject phase4TextsRoot;
+
+    [Header("Fase 1 - Progresso temporário")]
+    [SerializeField, Min(0.5f)] private float phase1ProgressDisplaySeconds = 3f;
+    [SerializeField] private string phase1ProgressFormat = "Divisões exploradas: {0}/{1}";
 
     [Header("Fim da Fase 1")]
     [SerializeField] private string initialSceneName;
@@ -96,6 +101,7 @@ public class TaskManager : MonoBehaviour
     private bool tutorialEndSequenceRunning = false;
     private Coroutine guidedCompletionRoutine;
     private Coroutine outdoorFoodStartRoutine;
+    private Coroutine phase1ProgressRoutine;
     private bool diningMemoryPhaseStarted = false;
     private bool diningMemoryPhaseCompleted = false;
     private bool outdoorFoodPhaseStarted = false;
@@ -106,6 +112,13 @@ public class TaskManager : MonoBehaviour
     private float guidedTasksBlockedUntil = -1f;
     private DiningMemoryPhaseController subscribedDiningMemoryPhaseController;
     private OutdoorFoodPhaseController subscribedOutdoorFoodPhaseController;
+    private GameObject phase1ProgressRoot;
+    private TMP_Text phase1ProgressText;
+    private Camera phase1ProgressCamera;
+    private Material phase1ProgressPanelMaterial;
+    private Material phase1ProgressOverlayMaterial;
+    private Texture2D phase1ProgressRoundedTexture;
+    private Sprite phase1ProgressRoundedSprite;
 
     private void Awake()
     {
@@ -136,6 +149,18 @@ public class TaskManager : MonoBehaviour
     {
         UnsubscribeDiningMemoryPhaseEvents();
         UnsubscribeOutdoorFoodPhaseEvents();
+
+        if (phase1ProgressPanelMaterial != null)
+            Destroy(phase1ProgressPanelMaterial);
+
+        if (phase1ProgressOverlayMaterial != null)
+            Destroy(phase1ProgressOverlayMaterial);
+
+        if (phase1ProgressRoundedSprite != null)
+            Destroy(phase1ProgressRoundedSprite);
+
+        if (phase1ProgressRoundedTexture != null)
+            Destroy(phase1ProgressRoundedTexture);
     }
 
     public void SetSceneRooms(RoomZone[] newRooms)
@@ -233,7 +258,6 @@ public class TaskManager : MonoBehaviour
 
         if (allRooms == null || allRooms.Length == 0)
         {
-            Debug.LogWarning("A lista global allRooms está vazia.");
             return;
         }
 
@@ -280,6 +304,8 @@ public class TaskManager : MonoBehaviour
 
         if (isNewVisit)
             SetVisitedMarkForRoomIDInCurrentScene(room.roomID, true);
+
+        ShowPhase1Progress();
 
         if (allRoomIDs.Count > 0 && visitedRoomIDs.Count >= allRoomIDs.Count)
         {
@@ -344,14 +370,12 @@ public class TaskManager : MonoBehaviour
 
         if (SceneTransitionManager.Instance == null)
         {
-            Debug.LogWarning("SceneTransitionManager não encontrado. Não foi possível voltar ao spawn inicial automaticamente.");
             afterReturn?.Invoke();
             yield break;
         }
 
         if (string.IsNullOrWhiteSpace(initialSpawnID))
         {
-            Debug.LogWarning("initialSpawnID está vazio no TaskManager.");
             afterReturn?.Invoke();
             yield break;
         }
@@ -389,7 +413,6 @@ public class TaskManager : MonoBehaviour
 
         if (allRooms == null || allRooms.Length == 0)
         {
-            Debug.LogWarning("A lista global allRooms está vazia.");
             return;
         }
 
@@ -412,10 +435,6 @@ public class TaskManager : MonoBehaviour
             if (roomsByID.TryGetValue(roomID, out GlobalRoomData room))
             {
                 taskOrder.Add(room);
-            }
-            else
-            {
-                Debug.LogWarning("A divisão da Fase 2 com o ID '" + roomID + "' não foi encontrada em allRooms.");
             }
         }
 
@@ -555,7 +574,6 @@ public class TaskManager : MonoBehaviour
 
         if (diningMemoryPhaseController == null)
         {
-            Debug.LogWarning("DiningMemoryPhaseController não atribuído no TaskManager.");
             return false;
         }
 
@@ -830,6 +848,195 @@ public class TaskManager : MonoBehaviour
 
         if (root.activeSelf != visible)
             root.SetActive(visible);
+    }
+
+    private void ShowPhase1Progress()
+    {
+        if (currentPhase != GamePhase.TutorialExploration || allRoomIDs.Count == 0)
+            return;
+
+        EnsurePhase1ProgressUI();
+
+        if (phase1ProgressRoot == null || phase1ProgressText == null)
+            return;
+
+        phase1ProgressText.text = string.Format(
+            phase1ProgressFormat,
+            visitedRoomIDs.Count,
+            allRoomIDs.Count);
+
+        phase1ProgressRoot.SetActive(true);
+
+        if (phase1ProgressRoutine != null)
+            StopCoroutine(phase1ProgressRoutine);
+
+        phase1ProgressRoutine = StartCoroutine(HidePhase1ProgressAfterDelay());
+    }
+
+    private IEnumerator HidePhase1ProgressAfterDelay()
+    {
+        yield return new WaitForSeconds(phase1ProgressDisplaySeconds);
+
+        if (phase1ProgressRoot != null)
+            phase1ProgressRoot.SetActive(false);
+
+        phase1ProgressRoutine = null;
+    }
+
+    private void EnsurePhase1ProgressUI()
+    {
+        Camera targetCamera = Camera.main;
+        if (targetCamera == null)
+            return;
+
+        if (phase1ProgressRoot != null && phase1ProgressCamera == targetCamera)
+            return;
+
+        phase1ProgressCamera = targetCamera;
+
+        GameObject canvasObject = new GameObject(
+            "Phase1ProgressPopup",
+            typeof(RectTransform),
+            typeof(Canvas),
+            typeof(CanvasScaler));
+
+        phase1ProgressRoot = canvasObject;
+
+        Canvas canvas = canvasObject.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.WorldSpace;
+        canvas.worldCamera = targetCamera;
+        canvas.sortingOrder = 900;
+
+        CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
+        scaler.dynamicPixelsPerUnit = 10f;
+        scaler.referencePixelsPerUnit = 100f;
+
+        RectTransform canvasRect = canvasObject.GetComponent<RectTransform>();
+        canvasRect.SetParent(targetCamera.transform, false);
+        canvasRect.sizeDelta = new Vector2(1000f, 600f);
+        canvasRect.localPosition = new Vector3(0f, 0f, 1.4f);
+        canvasRect.localRotation = Quaternion.identity;
+        canvasRect.localScale = Vector3.one * 0.0015f;
+
+        GameObject panelObject = new GameObject(
+            "Panel",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        panelObject.transform.SetParent(canvasObject.transform, false);
+
+        RectTransform panelRect = panelObject.GetComponent<RectTransform>();
+        panelRect.anchorMin = new Vector2(0.5f, 1f);
+        panelRect.anchorMax = new Vector2(0.5f, 1f);
+        panelRect.pivot = new Vector2(0.5f, 1f);
+        panelRect.anchoredPosition = new Vector2(0f, -105f);
+        panelRect.sizeDelta = new Vector2(440f, 78f);
+
+        Image panel = panelObject.GetComponent<Image>();
+        panel.color = new Color(0.03f, 0.05f, 0.08f, 0.82f);
+        EnsurePhase1ProgressRoundedSprite();
+        panel.sprite = phase1ProgressRoundedSprite;
+        panel.type = Image.Type.Sliced;
+
+        Shader panelOverlayShader = Shader.Find("UI/NoZTest");
+        if (panelOverlayShader != null)
+        {
+            if (phase1ProgressPanelMaterial != null)
+                Destroy(phase1ProgressPanelMaterial);
+
+            phase1ProgressPanelMaterial = new Material(panelOverlayShader)
+            {
+                name = "Phase 1 Progress Panel Overlay"
+            };
+            panel.material = phase1ProgressPanelMaterial;
+        }
+
+        GameObject textObject = new GameObject(
+            "ProgressText",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(TextMeshProUGUI));
+        textObject.transform.SetParent(panelObject.transform, false);
+
+        RectTransform textRect = textObject.GetComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = new Vector2(18f, 8f);
+        textRect.offsetMax = new Vector2(-18f, -8f);
+
+        TextMeshProUGUI text = textObject.GetComponent<TextMeshProUGUI>();
+        text.fontSize = 30f;
+        text.fontStyle = FontStyles.Bold;
+        text.color = Color.white;
+        text.alignment = TextAlignmentOptions.Center;
+        text.textWrappingMode = TextWrappingModes.NoWrap;
+        text.raycastTarget = false;
+        phase1ProgressText = text;
+
+        Shader overlayShader = Shader.Find("TextMeshPro/Distance Field Overlay");
+        if (overlayShader != null && text.fontSharedMaterial != null)
+        {
+            if (phase1ProgressOverlayMaterial != null)
+                Destroy(phase1ProgressOverlayMaterial);
+
+            phase1ProgressOverlayMaterial = new Material(text.fontSharedMaterial)
+            {
+                shader = overlayShader,
+                name = "Phase 1 Progress Overlay"
+            };
+            text.fontSharedMaterial = phase1ProgressOverlayMaterial;
+        }
+
+        phase1ProgressRoot.SetActive(false);
+    }
+
+    private void EnsurePhase1ProgressRoundedSprite()
+    {
+        if (phase1ProgressRoundedSprite != null)
+            return;
+
+        const int textureSize = 64;
+        const float cornerRadius = 14f;
+        Color32[] pixels = new Color32[textureSize * textureSize];
+
+        for (int y = 0; y < textureSize; y++)
+        {
+            for (int x = 0; x < textureSize; x++)
+            {
+                float nearestX = Mathf.Clamp(x + 0.5f, cornerRadius, textureSize - cornerRadius);
+                float nearestY = Mathf.Clamp(y + 0.5f, cornerRadius, textureSize - cornerRadius);
+                float distance = Vector2.Distance(
+                    new Vector2(x + 0.5f, y + 0.5f),
+                    new Vector2(nearestX, nearestY));
+                byte alpha = (byte)Mathf.RoundToInt(
+                    Mathf.Clamp01(cornerRadius + 0.5f - distance) * 255f);
+
+                pixels[y * textureSize + x] = new Color32(255, 255, 255, alpha);
+            }
+        }
+
+        phase1ProgressRoundedTexture = new Texture2D(
+            textureSize,
+            textureSize,
+            TextureFormat.RGBA32,
+            false)
+        {
+            name = "Phase 1 Progress Rounded Rectangle",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        phase1ProgressRoundedTexture.SetPixels32(pixels);
+        phase1ProgressRoundedTexture.Apply();
+
+        phase1ProgressRoundedSprite = Sprite.Create(
+            phase1ProgressRoundedTexture,
+            new Rect(0f, 0f, textureSize, textureSize),
+            new Vector2(0.5f, 0.5f),
+            100f,
+            0,
+            SpriteMeshType.FullRect,
+            Vector4.one * 16f);
+        phase1ProgressRoundedSprite.name = "Phase 1 Progress Rounded Rectangle";
     }
 
     private GameObject FindGameObjectByNameIncludingInactive(string objectName)

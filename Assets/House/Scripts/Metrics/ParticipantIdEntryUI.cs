@@ -18,6 +18,8 @@ public class ParticipantIdEntryUI : MonoBehaviour
     private TMP_Text participantIdText;
     private TMP_Text statusText;
     private GameObject locomotionObject;
+    private Texture2D roundedRectangleTexture;
+    private Sprite roundedRectangleSprite;
     private bool locomotionWasActive;
     private bool initialized;
 
@@ -66,6 +68,12 @@ public class ParticipantIdEntryUI : MonoBehaviour
     private void OnDestroy()
     {
         RestoreLocomotion();
+
+        if (roundedRectangleSprite != null)
+            Destroy(roundedRectangleSprite);
+
+        if (roundedRectangleTexture != null)
+            Destroy(roundedRectangleTexture);
     }
 
     private void BuildInterface(Camera targetCamera)
@@ -88,6 +96,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
 
         Image background = gameObject.AddComponent<Image>();
         background.color = new Color(0.035f, 0.055f, 0.08f, 0.98f);
+        ApplyRoundedCorners(background);
 
         CreateText(
             "Title",
@@ -285,7 +294,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
         DontDestroyOnLoad(eventSystemObject);
     }
 
-    private static TMP_Text CreateText(
+    private TMP_Text CreateText(
         string objectName,
         Transform parent,
         string content,
@@ -322,7 +331,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
         return text;
     }
 
-    private static Button CreateButton(
+    private Button CreateButton(
         string objectName,
         Transform parent,
         string label,
@@ -349,6 +358,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
 
         Image image = buttonObject.GetComponent<Image>();
         image.color = normalColor;
+        ApplyRoundedCorners(image);
 
         Button button = buttonObject.GetComponent<Button>();
         ColorBlock colors = button.colors;
@@ -371,5 +381,65 @@ public class ParticipantIdEntryUI : MonoBehaviour
             Color.white);
 
         return button;
+    }
+
+    private void ApplyRoundedCorners(Image image)
+    {
+        if (image == null)
+            return;
+
+        EnsureRoundedRectangleSprite();
+        image.sprite = roundedRectangleSprite;
+        image.type = Image.Type.Sliced;
+    }
+
+    private void EnsureRoundedRectangleSprite()
+    {
+        if (roundedRectangleSprite != null)
+            return;
+
+        const int textureSize = 64;
+        const float cornerRadius = 14f;
+        Color32[] pixels = new Color32[textureSize * textureSize];
+
+        for (int y = 0; y < textureSize; y++)
+        {
+            for (int x = 0; x < textureSize; x++)
+            {
+                float nearestX = Mathf.Clamp(x + 0.5f, cornerRadius, textureSize - cornerRadius);
+                float nearestY = Mathf.Clamp(y + 0.5f, cornerRadius, textureSize - cornerRadius);
+                float distance = Vector2.Distance(
+                    new Vector2(x + 0.5f, y + 0.5f),
+                    new Vector2(nearestX, nearestY));
+                byte alpha = (byte)Mathf.RoundToInt(
+                    Mathf.Clamp01(cornerRadius + 0.5f - distance) * 255f);
+
+                pixels[y * textureSize + x] = new Color32(255, 255, 255, alpha);
+            }
+        }
+
+        roundedRectangleTexture = new Texture2D(
+            textureSize,
+            textureSize,
+            TextureFormat.RGBA32,
+            false)
+        {
+            name = "Participant ID Rounded Rectangle",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        roundedRectangleTexture.SetPixels32(pixels);
+        roundedRectangleTexture.Apply();
+
+        Vector4 border = Vector4.one * 16f;
+        roundedRectangleSprite = Sprite.Create(
+            roundedRectangleTexture,
+            new Rect(0f, 0f, textureSize, textureSize),
+            new Vector2(0.5f, 0.5f),
+            100f,
+            0,
+            SpriteMeshType.FullRect,
+            border);
+        roundedRectangleSprite.name = "Participant ID Rounded Rectangle";
     }
 }
