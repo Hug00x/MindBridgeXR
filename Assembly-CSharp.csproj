@@ -55,7 +55,9 @@
     <Compile Include="Assets\House\Scripts\SceneTransitionManager.cs" />
     <Compile Include="Assets\House\Scripts\OutdoorFoodGame\FoodListPickup.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark02.cs" />
+    <Compile Include="Assets\House\Scripts\Metrics\MetricsManager.cs" />
     <Compile Include="Assets\House\Scripts\TaskManager.cs" />
+    <Compile Include="Assets\House\Scripts\Metrics\MetricsReportExporter.cs" />
     <Compile Include="Assets\House\Scripts\ImpactSound.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_ExampleScript_01.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMPro_InstructionOverlay.cs" />
@@ -74,6 +76,7 @@
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\ShaderPropAnimator.cs" />
     <Compile Include="Assets\House\Scripts\PersistentXRRig.cs" />
     <Compile Include="Assets\House\Scripts\RoomZone.cs" />
+    <Compile Include="Assets\House\Scripts\Metrics\MetricsData.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_TextInfoDebugTool.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\VertexShakeA.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark01_UGUI.cs" />
@@ -107,6 +110,7 @@
     <Compile Include="Assets\House\Scripts\OutdoorFoodGame\WorldArrowIndicator.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TextMeshProFloatingText.cs" />
     <Compile Include="Assets\House\Scripts\OutdoorFoodGame\FoodType.cs" />
+    <Compile Include="Assets\House\Scripts\Metrics\ParticipantIdEntryUI.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />

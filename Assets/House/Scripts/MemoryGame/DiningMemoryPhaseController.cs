@@ -59,6 +59,7 @@ public class DiningMemoryPhaseController : MonoBehaviour
         if (!string.Equals(roomID, diningRoomID, StringComparison.OrdinalIgnoreCase))
             return;
 
+        MetricsManager.Instance?.RecordDiningRoomReached();
         ChangeState(DiningPhaseState.GoToTable);
     }
 
@@ -87,6 +88,7 @@ public class DiningMemoryPhaseController : MonoBehaviour
         if (state != DiningPhaseState.GoToTable)
             return;
 
+        MetricsManager.Instance?.RecordDiningTableReached();
         ChangeState(DiningPhaseState.PlayMemoryGame);
     }
 

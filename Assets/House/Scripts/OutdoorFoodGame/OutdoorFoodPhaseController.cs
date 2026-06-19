@@ -40,6 +40,10 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     [Header("Objective")]
     [SerializeField] private bool resetFoodOnBegin = true;
 
+    [Header("Delivery Protection")]
+    [Tooltip("Impede que a mesma colocação seja processada várias vezes por colliders diferentes.")]
+    [SerializeField, Min(0f)] private float deliveryAttemptCooldownSeconds = 1f;
+
     [Header("Diegetic References")]
     [SerializeField] private FoodListPickup foodListPickup;
     [SerializeField] private FoodDeliveryZone deliveryZone;
@@ -70,6 +74,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
 
     private OutdoorFoodPhaseState state = OutdoorFoodPhaseState.Inactive;
     private readonly List<GameObject> spawnedPlateVisuals = new List<GameObject>();
+    private readonly Dictionary<int, double> lastDeliveryAttemptTimes = new Dictionary<int, double>();
     private static readonly Dictionary<FoodType, int> savedDeliveredCounts = new Dictionary<FoodType, int>();
     private static OutdoorFoodPhaseState savedState = OutdoorFoodPhaseState.Inactive;
     private static bool hasSavedProgress = false;
@@ -100,6 +105,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
             return;
 
         ResolveReferences();
+        lastDeliveryAttemptTimes.Clear();
 
         if (resetSavedProgress)
         {
@@ -135,26 +141,44 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         if (food == null || food.IsDelivered)
             return FoodDeliveryResult.Ignored;
 
+        if (state != OutdoorFoodPhaseState.FindFoodList &&
+            state != OutdoorFoodPhaseState.DeliverFood)
+        {
+            return FoodDeliveryResult.Ignored;
+        }
+
+        if (!TryBeginDeliveryAttempt(food))
+            return FoodDeliveryResult.Ignored;
+
         if (state == OutdoorFoodPhaseState.FindFoodList)
         {
             PlayOneShot(rejectedClip);
+            MetricsManager.Instance?.RecordFoodDeliveryAttempt(
+                food,
+                "rejected",
+                "list_not_collected");
             return FoodDeliveryResult.RejectedReturnToStart;
         }
-
-        if (state != OutdoorFoodPhaseState.DeliverFood)
-            return FoodDeliveryResult.Ignored;
 
         FoodRequirement requirement = GetRequirement(food.FoodType);
 
         if (requirement == null)
         {
             PlayOneShot(rejectedClip);
+            MetricsManager.Instance?.RecordFoodDeliveryAttempt(
+                food,
+                "rejected",
+                "food_not_requested");
             return FoodDeliveryResult.RejectedReturnToStart;
         }
 
         if (requirement.deliveredCount >= requirement.requiredCount)
         {
             PlayOneShot(rejectedClip);
+            MetricsManager.Instance?.RecordFoodDeliveryAttempt(
+                food,
+                "rejected",
+                "required_quantity_already_complete");
             return FoodDeliveryResult.RejectedReturnToStart;
         }
 
@@ -163,11 +187,31 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         ShowFoodOnPlate(food.FoodType, plateSlotIndex);
         SaveProgress();
         PlayOneShot(acceptedClip);
+        MetricsManager.Instance?.RecordFoodDeliveryAttempt(
+            food,
+            "accepted",
+            "accepted");
 
         if (IsComplete())
             CompletePhase();
 
         return FoodDeliveryResult.Accepted;
+    }
+
+    private bool TryBeginDeliveryAttempt(FoodCollectible food)
+    {
+        int foodInstanceId = food.GetInstanceID();
+        double now = Time.realtimeSinceStartupAsDouble;
+        double cooldown = Mathf.Max(0f, deliveryAttemptCooldownSeconds);
+
+        if (lastDeliveryAttemptTimes.TryGetValue(foodInstanceId, out double previousAttemptTime) &&
+            now - previousAttemptTime < cooldown)
+        {
+            return false;
+        }
+
+        lastDeliveryAttemptTimes[foodInstanceId] = now;
+        return true;
     }
 
     private void SubscribeEvents()
@@ -190,6 +234,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         if (state != OutdoorFoodPhaseState.FindFoodList)
             return;
 
+        MetricsManager.Instance?.RecordFoodListPickedUp();
         ChangeState(OutdoorFoodPhaseState.DeliverFood);
         SaveProgress();
     }

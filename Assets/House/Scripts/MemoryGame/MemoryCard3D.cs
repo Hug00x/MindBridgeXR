@@ -6,6 +6,8 @@ public class MemoryCard3D : MonoBehaviour
 {
     [Header("Identificação")]
     [SerializeField] private string pairID;
+    [Tooltip("ID usado nas métricas. Se ficar vazio, será usado o nome do GameObject.")]
+    [SerializeField] private string metricsID;
 
     [Header("Visual (Opcional)")]
     [SerializeField] private GameObject frontVisual;
@@ -26,6 +28,7 @@ public class MemoryCard3D : MonoBehaviour
     [SerializeField] private bool preserveWorldXZDuringFlip = true;
 
     public string PairID => pairID;
+    public string MetricsId => string.IsNullOrWhiteSpace(metricsID) ? gameObject.name : metricsID;
     public bool ExcludeFromCompletion => excludeFromCompletion;
     public bool IsRevealed { get; private set; }
     public bool IsMatched { get; private set; }

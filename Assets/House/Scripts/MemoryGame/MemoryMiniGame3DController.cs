@@ -26,6 +26,7 @@ public class MemoryMiniGame3DController : MonoBehaviour
     private bool inputLocked;
     private Coroutine roundRoutine;
     private readonly HashSet<string> requiredPairIDs = new HashSet<string>();
+    private double attemptStartedRealtime;
 
     public bool IsRunning { get; private set; }
 
@@ -113,6 +114,7 @@ public class MemoryMiniGame3DController : MonoBehaviour
 
         IsRunning = true;
         inputLocked = false;
+        MetricsManager.Instance?.BeginMemoryGame(requiredPairIDs.Count);
         roundRoutine = null;
     }
 
@@ -123,11 +125,13 @@ public class MemoryMiniGame3DController : MonoBehaviour
         if (!IsRunning || inputLocked || card == null)
             return;
 
+        MetricsManager.Instance?.RecordMemoryCardSelected(card.MetricsId);
         card.Reveal();
 
         if (firstCard == null)
         {
             firstCard = card;
+            attemptStartedRealtime = Time.realtimeSinceStartupAsDouble;
             return;
         }
 
@@ -145,6 +149,14 @@ public class MemoryMiniGame3DController : MonoBehaviour
         if (firstCard != null && secondCard != null)
         {
             bool isMatch = string.Equals(firstCard.PairID, secondCard.PairID, StringComparison.Ordinal);
+            float attemptDuration = Mathf.Max(
+                0f,
+                (float)(Time.realtimeSinceStartupAsDouble - attemptStartedRealtime));
+
+            MetricsManager.Instance?.RecordMemoryAttempt(
+                isMatch,
+                attemptDuration,
+                isMatch ? firstCard.PairID : string.Empty);
 
             if (pairFeedbackAudioDelay > 0f)
                 yield return new WaitForSeconds(pairFeedbackAudioDelay);
@@ -171,6 +183,7 @@ public class MemoryMiniGame3DController : MonoBehaviour
         if (AreAllCardsMatched())
         {
             IsRunning = false;
+            MetricsManager.Instance?.CompleteMemoryGame();
             RoundCompleted?.Invoke();
         }
     }

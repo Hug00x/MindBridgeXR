@@ -9,6 +9,8 @@ public class FoodCollectible : MonoBehaviour
     [Header("Food")]
     [SerializeField] private FoodType foodType;
     [SerializeField] private string displayName;
+    [Tooltip("ID usado nas métricas. Se ficar vazio, será usado o nome do GameObject.")]
+    [SerializeField] private string metricsID;
 
     [Header("Return")]
     [SerializeField] private float returnToStartDuration = 0.35f;
@@ -16,6 +18,7 @@ public class FoodCollectible : MonoBehaviour
 
     public FoodType FoodType => foodType;
     public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? foodType.ToString() : displayName;
+    public string MetricsId => string.IsNullOrWhiteSpace(metricsID) ? gameObject.name : metricsID;
     public bool IsHeld { get; private set; }
     public bool IsDelivered { get; private set; }
 
@@ -125,6 +128,7 @@ public class FoodCollectible : MonoBehaviour
         if (returnRoutine != null)
             StopReturnRoutine();
 
+        MetricsManager.Instance?.RecordFoodGrab(this);
         Grabbed?.Invoke(this);
     }
 
@@ -132,6 +136,7 @@ public class FoodCollectible : MonoBehaviour
     {
         IsHeld = false;
         Released?.Invoke(this);
+        MetricsManager.Instance?.RecordFoodReleased(this, IsDelivered);
     }
 
     private IEnumerator ReturnToStartRoutine()

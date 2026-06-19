@@ -61,9 +61,13 @@ public class TaskManager : MonoBehaviour
     [SerializeField] private OutdoorFoodPhaseController outdoorFoodPhaseController;
     [SerializeField] private float memoryCompletionToOutdoorDelay = 2.5f;
 
-    [Header("Definições")]
-    [SerializeField] private bool shuffleTaskOrder = true;
-    [SerializeField] private int maxTasksPerRound = 10;
+    [Header("Métricas")]
+    [Tooltip("Pede o ID do participante através de um teclado numérico ao iniciar a aplicação.")]
+    [SerializeField] private bool requestParticipantIdOnStartup = true;
+    [Tooltip("Usado apenas quando o pedido de ID no arranque está desativado.")]
+    [SerializeField] private string fallbackParticipantId = "P001";
+    [SerializeField] private bool collectPhase1DistanceTravelled = false;
+    [SerializeField, Min(0.1f)] private float distanceSampleInterval = 0.5f;
 
     private RoomZone[] rooms;
     private string currentRoomID;
@@ -73,6 +77,14 @@ public class TaskManager : MonoBehaviour
     private const string Phase2TextsRootName = "Texts2Fase";
     private const string Phase3TextsRootName = "Texts3Fase";
     private const string Phase4TextsRootName = "Texts4Fase";
+    private static readonly string[] GuidedTaskRoomOrder =
+    {
+        "floor2_bathroom2",
+        "floor2_bedroomB",
+        "floor1_bathroom1",
+        "exterior_patio",
+        "floor1_livingroom"
+    };
 
     private readonly HashSet<string> allRoomIDs = new HashSet<string>();
     private readonly HashSet<string> visitedRoomIDs = new HashSet<string>();
@@ -88,6 +100,9 @@ public class TaskManager : MonoBehaviour
     private bool diningMemoryPhaseCompleted = false;
     private bool outdoorFoodPhaseStarted = false;
     private bool outdoorFoodPhaseCompleted = false;
+    private bool guidedMetricsStarted = false;
+    private bool metricsSessionStarted = false;
+    private RoomZone pendingRoomBeforeSessionStart;
     private float guidedTasksBlockedUntil = -1f;
     private DiningMemoryPhaseController subscribedDiningMemoryPhaseController;
     private OutdoorFoodPhaseController subscribedOutdoorFoodPhaseController;
@@ -110,6 +125,11 @@ public class TaskManager : MonoBehaviour
         EnsureDiningMemoryControllerReference();
         EnsureOutdoorFoodControllerReference();
         RefreshPhaseTextsVisibility();
+
+        if (requestParticipantIdOnStartup)
+            ParticipantIdEntryUI.Show(StartMetricsSession);
+        else
+            StartMetricsSession(fallbackParticipantId);
     }
 
     private void OnDestroy()
@@ -166,6 +186,13 @@ public class TaskManager : MonoBehaviour
         if (room == null)
             return;
 
+        if (!metricsSessionStarted)
+        {
+            pendingRoomBeforeSessionStart = room;
+            return;
+        }
+
+        MetricsManager.Instance?.RecordRoomEntered(room.roomID);
         currentRoomID = room.roomID;
 
         if (diningMemoryPhaseStarted && !diningMemoryPhaseCompleted)
@@ -192,6 +219,9 @@ public class TaskManager : MonoBehaviour
             if (Time.time < guidedTasksBlockedUntil)
                 return;
 
+            if (guidedMetricsStarted)
+                MetricsManager.Instance?.CompleteGuidedTask(currentTaskIndex + 1);
+
             currentTaskIndex++;
             SetNextTaskFromList();
         }
@@ -217,6 +247,27 @@ public class TaskManager : MonoBehaviour
 
     }
 
+    public void StartMetricsSession(string participantId)
+    {
+        if (metricsSessionStarted)
+            return;
+
+        MetricsManager metrics = MetricsManager.GetOrCreate();
+        metrics.BeginSession(
+            participantId,
+            collectPhase1DistanceTravelled,
+            distanceSampleInterval);
+        metrics.BeginPhase1();
+        metricsSessionStarted = true;
+
+        if (pendingRoomBeforeSessionStart != null)
+        {
+            RoomZone initialRoom = pendingRoomBeforeSessionStart;
+            pendingRoomBeforeSessionStart = null;
+            PlayerEnteredRoom(initialRoom);
+        }
+    }
+
     private void HandleTutorialRoomVisit(RoomZone room)
     {
         if (tutorialEndSequenceRunning)
@@ -232,6 +283,7 @@ public class TaskManager : MonoBehaviour
 
         if (allRoomIDs.Count > 0 && visitedRoomIDs.Count >= allRoomIDs.Count)
         {
+            MetricsManager.Instance?.CompletePhase1();
             StartCoroutine(FinishTutorialThenStartPhase2());
             return;
         }
@@ -247,8 +299,24 @@ public class TaskManager : MonoBehaviour
         ClearAllVisitedMarksInCurrentScene();
 
         StartGuidedNavigationPhase();
-        yield return StartCoroutine(ReturnToInitialSpawnThen(phase1CompletionMessage, null));
+        yield return StartCoroutine(ReturnToInitialSpawnThen(phase1CompletionMessage, BeginGuidedMetrics));
         tutorialEndSequenceRunning = false;
+    }
+
+    private void BeginGuidedMetrics()
+    {
+        if (guidedMetricsStarted)
+            return;
+
+        guidedMetricsStarted = true;
+        MetricsManager.Instance?.BeginPhase2();
+
+        if (targetRoomData != null)
+        {
+            MetricsManager.Instance?.BeginGuidedTask(
+                currentTaskIndex + 1,
+                targetRoomData.roomID);
+        }
     }
 
     private void StartGuidedNavigationPhase()
@@ -325,7 +393,7 @@ public class TaskManager : MonoBehaviour
             return;
         }
 
-        HashSet<string> uniqueRoomIDs = new HashSet<string>();
+        Dictionary<string, GlobalRoomData> roomsByID = new Dictionary<string, GlobalRoomData>();
 
         foreach (GlobalRoomData room in allRooms)
         {
@@ -335,18 +403,20 @@ public class TaskManager : MonoBehaviour
             if (string.IsNullOrWhiteSpace(room.roomID))
                 continue;
 
-            if (!uniqueRoomIDs.Add(room.roomID))
-                continue;
-
-            taskOrder.Add(room);
+            if (!roomsByID.ContainsKey(room.roomID))
+                roomsByID.Add(room.roomID, room);
         }
 
-        if (shuffleTaskOrder)
-            ShuffleList(taskOrder);
-
-        if (maxTasksPerRound > 0 && taskOrder.Count > maxTasksPerRound)
+        foreach (string roomID in GuidedTaskRoomOrder)
         {
-            taskOrder = taskOrder.GetRange(0, maxTasksPerRound);
+            if (roomsByID.TryGetValue(roomID, out GlobalRoomData room))
+            {
+                taskOrder.Add(room);
+            }
+            else
+            {
+                Debug.LogWarning("A divisão da Fase 2 com o ID '" + roomID + "' não foi encontrada em allRooms.");
+            }
         }
 
         totalTaskCount = taskOrder.Count;
@@ -422,6 +492,13 @@ public class TaskManager : MonoBehaviour
                 HighlightTargetIfPresentInCurrentScene();
                 UpdatePhase2TaskListText();
 
+                if (guidedMetricsStarted)
+                {
+                    MetricsManager.Instance?.BeginGuidedTask(
+                        currentTaskIndex + 1,
+                        targetRoomData.roomID);
+                }
+
                 return;
             }
 
@@ -431,6 +508,13 @@ public class TaskManager : MonoBehaviour
         targetRoomData = null;
         allTasksCompleted = true;
         UpdatePhase2TaskListText();
+
+        if (guidedMetricsStarted)
+        {
+            MetricsManager.Instance?.CompletePhase2();
+            guidedMetricsStarted = false;
+        }
+
         if (guidedCompletionRoutine != null)
             StopCoroutine(guidedCompletionRoutine);
 
@@ -478,6 +562,7 @@ public class TaskManager : MonoBehaviour
         diningMemoryPhaseStarted = true;
         currentPhase = GamePhase.DiningMemory;
         RefreshPhaseTextsVisibility();
+        MetricsManager.Instance?.BeginPhase3();
         diningMemoryPhaseController.BeginPhase();
 
         if (!string.IsNullOrWhiteSpace(currentRoomID))
@@ -568,6 +653,7 @@ public class TaskManager : MonoBehaviour
             return;
 
         diningMemoryPhaseCompleted = true;
+        MetricsManager.Instance?.CompletePhase3();
 
         if (!startOutdoorFoodPhaseAfterMemory)
             return;
@@ -600,6 +686,7 @@ public class TaskManager : MonoBehaviour
         currentPhase = GamePhase.OutdoorFood;
         RefreshPhaseTextsVisibility();
         ClearAllHighlights();
+        MetricsManager.Instance?.BeginPhase4();
 
         EnsureOutdoorFoodControllerReference();
 
@@ -616,6 +703,8 @@ public class TaskManager : MonoBehaviour
         outdoorFoodPhaseCompleted = true;
         currentPhase = GamePhase.OutdoorFood;
         RefreshPhaseTextsVisibility();
+        MetricsManager.Instance?.CompletePhase4();
+        MetricsManager.Instance?.CompleteExperience();
 
         if (SceneTransitionManager.Instance != null)
             SceneTransitionManager.Instance.ShowFinalMessage(phase4CompletionMessage, phaseCompletionMessageHoldSeconds);
@@ -759,14 +848,4 @@ public class TaskManager : MonoBehaviour
         return null;
     }
 
-    private void ShuffleList(List<GlobalRoomData> list)
-    {
-        for (int i = 0; i < list.Count; i++)
-        {
-            int randomIndex = Random.Range(i, list.Count);
-            GlobalRoomData temp = list[i];
-            list[i] = list[randomIndex];
-            list[randomIndex] = temp;
-        }
-    }
 }
