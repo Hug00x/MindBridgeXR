@@ -21,10 +21,26 @@ public class SceneTransitionManager : MonoBehaviour
     [SerializeField] private string leftControllerName = "Left Controller";
     [SerializeField] private string rightControllerName = "Right Controller";
 
+    [Header("Spawn XR")]
+    [SerializeField, Min(1)]
+    [Tooltip("Número de frames durante os quais a pose é novamente corrigida enquanto o ecrã está preto.")]
+    private int spawnStabilizationFrames = 3;
+
+    [SerializeField, Min(0.0001f)]
+    [Tooltip("Erro máximo aceite entre a câmara e o ponto de spawn, em metros.")]
+    private float spawnPositionTolerance = 0.005f;
+
+    [SerializeField, Min(0.01f)]
+    [Tooltip("Erro máximo aceite na orientação horizontal da câmara, em graus.")]
+    private float spawnYawTolerance = 0.25f;
+
     private string pendingSpawnID;
     private string pendingTransitionMessage;
     private float pendingMessageHoldSeconds;
-    private bool isTransitioning = false;
+    private bool isTransitioning;
+    private GameObject suspendedLocomotion;
+    private bool suspendedLocomotionWasActive;
+
     public bool IsTransitioning => isTransitioning;
 
     private void Awake()
@@ -40,6 +56,15 @@ public class SceneTransitionManager : MonoBehaviour
         HideFadeMessage();
     }
 
+    private void OnDestroy()
+    {
+        if (Instance != this)
+            return;
+
+        RestoreSuspendedLocomotion();
+        Instance = null;
+    }
+
     public void TransitionToScene(string sceneName, string spawnID)
     {
         TransitionToScene(sceneName, spawnID, null, defaultMessageHoldSeconds);
@@ -50,7 +75,11 @@ public class SceneTransitionManager : MonoBehaviour
         TransitionToScene(sceneName, spawnID, transitionMessage, defaultMessageHoldSeconds);
     }
 
-    public void TransitionToScene(string sceneName, string spawnID, string transitionMessage, float messageHoldSeconds)
+    public void TransitionToScene(
+        string sceneName,
+        string spawnID,
+        string transitionMessage,
+        float messageHoldSeconds)
     {
         if (isTransitioning)
             return;
@@ -82,26 +111,27 @@ public class SceneTransitionManager : MonoBehaviour
 
         ShowFadeMessage(pendingTransitionMessage);
 
-        if (!string.IsNullOrWhiteSpace(pendingTransitionMessage) && pendingMessageHoldSeconds > 0f)
+        if (!string.IsNullOrWhiteSpace(pendingTransitionMessage) &&
+            pendingMessageHoldSeconds > 0f)
+        {
             yield return new WaitForSeconds(pendingMessageHoldSeconds);
+        }
 
         yield return SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
 
-        // Dá tempo ao XR e à nova cena para assentarem
+        // Dá tempo à nova cena e ao tracking XR para estabilizarem.
         yield return null;
         yield return null;
         yield return new WaitForSeconds(0.1f);
 
-        MovePlayerToSpawnPoint();
+        yield return StartCoroutine(MovePlayerToSpawnPoint());
 
-        // Espera mais um bocadinho para garantir estabilização
+        // Reativa a locomoção ainda com o ecrã totalmente preto, para que os
+        // providers e ações de input estejam prontos antes de revelar a cena.
+        RestoreSuspendedLocomotion();
         yield return null;
-        yield return null;
-
-        yield return StartCoroutine(ResetXRState());
 
         HideFadeMessage();
-
         yield return StartCoroutine(Fade(1f, 0f));
 
         pendingTransitionMessage = null;
@@ -122,98 +152,346 @@ public class SceneTransitionManager : MonoBehaviour
         isTransitioning = false;
     }
 
-    private void MovePlayerToSpawnPoint()
+    private IEnumerator MovePlayerToSpawnPoint()
     {
-        SceneSpawnPoint[] spawnPoints = FindObjectsOfType<SceneSpawnPoint>(true);
+        SceneSpawnPoint spawnPoint = FindSpawnPoint(pendingSpawnID);
+        if (spawnPoint == null)
+        {
+            Debug.LogError(
+                $"Não foi encontrado nenhum SceneSpawnPoint com o ID ou nome '{pendingSpawnID}' " +
+                $"na cena '{SceneManager.GetActiveScene().name}'.",
+                this);
+            yield break;
+        }
+
+        XROrigin xrOrigin = FindPlayerXROrigin();
+        if (xrOrigin == null)
+        {
+            Debug.LogError("Não foi encontrado um XROrigin ativo para posicionar o jogador.", this);
+            yield break;
+        }
+
+        GameObject xrOriginObject = xrOrigin.Origin != null
+            ? xrOrigin.Origin
+            : xrOrigin.gameObject;
+
+        CharacterController characterController =
+            xrOriginObject.GetComponent<CharacterController>();
+
+        Transform searchRoot = xrOriginObject.transform;
+        GameObject locomotion = FindDescendantByName(searchRoot, locomotionName);
+        GameObject leftController = FindDescendantByName(searchRoot, leftControllerName);
+        GameObject rightController = FindDescendantByName(searchRoot, rightControllerName);
+
+        SuspendLocomotion(locomotion);
+
+        bool characterControllerWasEnabled =
+            characterController != null && characterController.enabled;
+        bool leftControllerWasActive =
+            leftController != null && leftController.activeSelf;
+        bool rightControllerWasActive =
+            rightController != null && rightController.activeSelf;
+
+        if (characterControllerWasEnabled)
+            characterController.enabled = false;
+
+        if (leftControllerWasActive)
+            leftController.SetActive(false);
+
+        if (rightControllerWasActive)
+            rightController.SetActive(false);
+
+        // Permite que transformações já enfileiradas pelo sistema de locomoção terminem.
+        yield return null;
+        yield return null;
+
+        if (!ApplySpawnPose(xrOrigin, spawnPoint))
+        {
+            RestoreXRObjects(
+                characterController,
+                characterControllerWasEnabled,
+                leftController,
+                leftControllerWasActive,
+                rightController,
+                rightControllerWasActive);
+            RestoreSuspendedLocomotion();
+            yield break;
+        }
+
+        int stabilizationFrames = Mathf.Max(1, spawnStabilizationFrames);
+        for (int frame = 0; frame < stabilizationFrames; frame++)
+        {
+            yield return null;
+            ApplySpawnPose(xrOrigin, spawnPoint);
+        }
+
+        // Última correção depois de o tracking XR atualizar a pose deste frame.
+        yield return new WaitForEndOfFrame();
+        ApplySpawnPose(xrOrigin, spawnPoint);
+
+        RestoreXRObjects(
+            characterController,
+            characterControllerWasEnabled,
+            leftController,
+            leftControllerWasActive,
+            rightController,
+            rightControllerWasActive);
+
+        ValidateSpawnResult(xrOrigin, spawnPoint);
+        ValidateHeadClearance(xrOriginObject, spawnPoint);
+    }
+
+    private SceneSpawnPoint FindSpawnPoint(string spawnID)
+    {
+        if (string.IsNullOrWhiteSpace(spawnID))
+            return null;
+
+        SceneSpawnPoint[] spawnPoints = FindObjectsByType<SceneSpawnPoint>(
+            FindObjectsInactive.Include,
+            FindObjectsSortMode.None);
+        SceneSpawnPoint idMatch = null;
+        SceneSpawnPoint nameMatch = null;
 
         foreach (SceneSpawnPoint spawnPoint in spawnPoints)
         {
-            bool matchesSpawnID = spawnPoint.spawnID == pendingSpawnID;
-            bool matchesObjectName = spawnPoint.gameObject.name == pendingSpawnID;
-
-            if (!matchesSpawnID && !matchesObjectName)
-                continue;
-
-            GameObject xrRigObject = GameObject.FindGameObjectWithTag("Player");
-            if (xrRigObject == null)
+            if (spawnPoint.spawnID == spawnID)
             {
-                return;
+                if (idMatch != null)
+                {
+                    Debug.LogError(
+                        $"Existem vários SceneSpawnPoint com o spawnID '{spawnID}'. " +
+                        $"Será usado '{idMatch.name}', mas os IDs devem ser únicos.",
+                        this);
+                    continue;
+                }
+
+                idMatch = spawnPoint;
             }
 
-            XROrigin xrOrigin = xrRigObject.GetComponent<XROrigin>();
-            CharacterController cc = xrRigObject.GetComponent<CharacterController>();
+            if (nameMatch == null && spawnPoint.gameObject.name == spawnID)
+                nameMatch = spawnPoint;
+        }
 
-            if (xrOrigin == null)
+        if (idMatch != null)
+            return idMatch;
+
+        if (nameMatch != null)
+        {
+            Debug.LogWarning(
+                $"O spawn '{spawnID}' foi encontrado pelo nome do GameObject. " +
+                "É mais robusto preencher o mesmo valor no campo Spawn ID.",
+                nameMatch);
+        }
+
+        return nameMatch;
+    }
+
+    private XROrigin FindPlayerXROrigin()
+    {
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null)
+        {
+            XROrigin playerOrigin = player.GetComponent<XROrigin>();
+            if (playerOrigin == null)
+                playerOrigin = player.GetComponentInParent<XROrigin>();
+            if (playerOrigin == null)
+                playerOrigin = player.GetComponentInChildren<XROrigin>(true);
+
+            if (playerOrigin != null)
+                return playerOrigin;
+        }
+
+        GameObject namedRig = FindObjectByName(xrRigName);
+        if (namedRig != null)
+        {
+            XROrigin namedOrigin = namedRig.GetComponent<XROrigin>();
+            if (namedOrigin != null)
+                return namedOrigin;
+        }
+
+        XROrigin[] allOrigins = FindObjectsByType<XROrigin>(
+            FindObjectsInactive.Include,
+            FindObjectsSortMode.None);
+        foreach (XROrigin origin in allOrigins)
+        {
+            if (origin.isActiveAndEnabled)
+                return origin;
+        }
+
+        return null;
+    }
+
+    private bool ApplySpawnPose(XROrigin xrOrigin, SceneSpawnPoint spawnPoint)
+    {
+        Camera camera = xrOrigin.Camera;
+        GameObject originObject = xrOrigin.Origin;
+        if (camera == null || originObject == null)
+            return false;
+
+        Vector3 targetForward =
+            Vector3.ProjectOnPlane(spawnPoint.transform.forward, Vector3.up);
+        Vector3 cameraForward =
+            Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up);
+
+        if (targetForward.sqrMagnitude > 0.000001f)
+        {
+            targetForward.Normalize();
+
+            if (cameraForward.sqrMagnitude > 0.000001f)
             {
-                return;
-            }
-
-            if (cc != null)
-                cc.enabled = false;
-
-            // 1) move a câmara para o ponto desejado
-            xrOrigin.MoveCameraToWorldLocation(spawnPoint.transform.position);
-
-            // 2) alinha a rotação horizontal com o spawn
-            Camera cam = xrOrigin.Camera;
-            if (cam != null)
-            {
-                float deltaY = spawnPoint.transform.eulerAngles.y - cam.transform.eulerAngles.y;
-                xrRigObject.transform.Rotate(0f, deltaY, 0f);
+                cameraForward.Normalize();
+                float yawCorrection =
+                    Vector3.SignedAngle(cameraForward, targetForward, Vector3.up);
+                xrOrigin.RotateAroundCameraUsingOriginUp(yawCorrection);
             }
             else
             {
-                xrRigObject.transform.rotation = spawnPoint.transform.rotation;
+                Vector3 originForward =
+                    Vector3.ProjectOnPlane(originObject.transform.forward, Vector3.up);
+                if (originForward.sqrMagnitude > 0.000001f)
+                {
+                    float yawCorrection =
+                        Vector3.SignedAngle(originForward, targetForward, Vector3.up);
+                    xrOrigin.RotateAroundCameraUsingOriginUp(yawCorrection);
+                }
             }
-
-            Physics.SyncTransforms();
-
-            if (cc != null)
-            {
-                cc.enabled = true;
-                cc.Move(Vector3.zero);
-            }
-
-            return;
         }
 
+        if (!xrOrigin.MoveCameraToWorldLocation(spawnPoint.transform.position))
+            return false;
+
+        // Elimina qualquer erro numérico residual deixado pela transformação do XROrigin.
+        Vector3 residualPositionError =
+            spawnPoint.transform.position - camera.transform.position;
+        originObject.transform.position += residualPositionError;
+
+        Physics.SyncTransforms();
+        return true;
     }
 
-    private IEnumerator ResetXRState()
+    private void ValidateSpawnResult(XROrigin xrOrigin, SceneSpawnPoint spawnPoint)
     {
-        GameObject xrRig = FindObjectByName(xrRigName);
-        GameObject locomotion = FindObjectByName(locomotionName);
-        GameObject leftController = FindObjectByName(leftControllerName);
-        GameObject rightController = FindObjectByName(rightControllerName);
+        Camera camera = xrOrigin.Camera;
+        if (camera == null)
+            return;
 
-        if (locomotion != null)
-            locomotion.SetActive(false);
+        float positionError =
+            Vector3.Distance(camera.transform.position, spawnPoint.transform.position);
 
-        if (leftController != null)
-            leftController.SetActive(false);
+        Vector3 targetForward =
+            Vector3.ProjectOnPlane(spawnPoint.transform.forward, Vector3.up);
+        Vector3 cameraForward =
+            Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up);
 
-        if (rightController != null)
-            rightController.SetActive(false);
+        float yawError = 0f;
+        if (targetForward.sqrMagnitude > 0.000001f &&
+            cameraForward.sqrMagnitude > 0.000001f)
+        {
+            yawError = Mathf.Abs(
+                Vector3.SignedAngle(cameraForward, targetForward, Vector3.up));
+        }
 
-        yield return null;
-        yield return null;
+        if (positionError > Mathf.Max(0.0001f, spawnPositionTolerance) ||
+            yawError > Mathf.Max(0.01f, spawnYawTolerance))
+        {
+            Debug.LogWarning(
+                $"O spawn '{spawnPoint.spawnID}' terminou com erro de posição " +
+                $"{positionError:F4} m e erro horizontal {yawError:F2}°. " +
+                "Verifica colisões e componentes que movam o XR Origin.",
+                spawnPoint);
+        }
+    }
 
-        if (locomotion != null)
-            locomotion.SetActive(true);
+    private void ValidateHeadClearance(GameObject xrOriginObject, SceneSpawnPoint spawnPoint)
+    {
+        float radius = spawnPoint.HeadClearanceRadius;
+        if (radius <= 0f)
+            return;
 
-        if (leftController != null)
+        Collider[] overlaps = Physics.OverlapSphere(
+            spawnPoint.transform.position,
+            radius,
+            ~0,
+            QueryTriggerInteraction.Ignore);
+
+        foreach (Collider overlap in overlaps)
+        {
+            if (overlap == null ||
+                overlap.transform == xrOriginObject.transform ||
+                overlap.transform.IsChildOf(xrOriginObject.transform))
+            {
+                continue;
+            }
+
+            Debug.LogWarning(
+                $"O spawn '{spawnPoint.spawnID}' tem o collider '{overlap.name}' a menos de " +
+                $"{radius:F2} m da posição da cabeça. Move o spawn para uma zona livre.",
+                spawnPoint);
+            return;
+        }
+    }
+
+    private void SuspendLocomotion(GameObject locomotion)
+    {
+        RestoreSuspendedLocomotion();
+
+        suspendedLocomotion = locomotion;
+        suspendedLocomotionWasActive =
+            suspendedLocomotion != null && suspendedLocomotion.activeSelf;
+
+        if (suspendedLocomotionWasActive)
+            suspendedLocomotion.SetActive(false);
+    }
+
+    private void RestoreSuspendedLocomotion()
+    {
+        if (suspendedLocomotion != null && suspendedLocomotionWasActive)
+            suspendedLocomotion.SetActive(true);
+
+        suspendedLocomotion = null;
+        suspendedLocomotionWasActive = false;
+    }
+
+    private void RestoreXRObjects(
+        CharacterController characterController,
+        bool characterControllerWasEnabled,
+        GameObject leftController,
+        bool leftControllerWasActive,
+        GameObject rightController,
+        bool rightControllerWasActive)
+    {
+        if (characterController != null && characterControllerWasEnabled)
+            characterController.enabled = true;
+
+        if (leftController != null && leftControllerWasActive)
             leftController.SetActive(true);
 
-        if (rightController != null)
+        if (rightController != null && rightControllerWasActive)
             rightController.SetActive(true);
 
         Physics.SyncTransforms();
+    }
 
+    private GameObject FindDescendantByName(Transform root, string objectName)
+    {
+        if (root == null || string.IsNullOrWhiteSpace(objectName))
+            return null;
+
+        Transform[] descendants = root.GetComponentsInChildren<Transform>(true);
+        foreach (Transform descendant in descendants)
+        {
+            if (descendant.name == objectName)
+                return descendant.gameObject;
+        }
+
+        return null;
     }
 
     private GameObject FindObjectByName(string objectName)
     {
-        GameObject[] allObjects = FindObjectsOfType<GameObject>(true);
+        GameObject[] allObjects = FindObjectsByType<GameObject>(
+            FindObjectsInactive.Include,
+            FindObjectsSortMode.None);
 
         foreach (GameObject obj in allObjects)
         {
@@ -227,9 +505,7 @@ public class SceneTransitionManager : MonoBehaviour
     private IEnumerator Fade(float startAlpha, float endAlpha)
     {
         if (fadeImage == null)
-        {
             yield break;
-        }
 
         float elapsed = 0f;
         Color color = fadeImage.color;

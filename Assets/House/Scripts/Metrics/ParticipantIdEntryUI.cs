@@ -90,7 +90,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
         RectTransform canvasRect = GetComponent<RectTransform>();
         canvasRect.SetParent(targetCamera.transform, false);
         canvasRect.sizeDelta = new Vector2(820f, 760f);
-        canvasRect.localPosition = new Vector3(0f, -0.03f, 1.55f);
+        canvasRect.localPosition = new Vector3(0f, -0.13f, 1.55f);
         canvasRect.localRotation = Quaternion.identity;
         canvasRect.localScale = Vector3.one * 0.00145f;
 
