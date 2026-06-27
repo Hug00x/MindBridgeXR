@@ -5,10 +5,17 @@ using TMPro;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
+/*
+ * Coordenador global da experiência MindBridgeXR.
+ * Este script gere a sequência das quatro fases, recebe entradas das divisões,
+ * ativa controladores especializados, controla textos de fase e encaminha eventos
+ * relevantes para o sistema de métricas.
+ */
 public class TaskManager : MonoBehaviour
 {
     public static TaskManager Instance;
 
+    // Estados principais que definem que regras estão ativas em cada momento.
     private enum GamePhase
     {
         TutorialExploration,
@@ -17,6 +24,7 @@ public class TaskManager : MonoBehaviour
         OutdoorFood
     }
 
+    // Entrada do catálogo global de divisões usadas por navegação e métricas.
     [System.Serializable]
     public class GlobalRoomData
     {
@@ -25,6 +33,7 @@ public class TaskManager : MonoBehaviour
         public string sceneName;
     }
 
+    // Configuração global da casa e dos textos mostrados em cada fase.
     [Header("Lista global de todas as divisões")]
     [SerializeField] private GlobalRoomData[] allRooms;
 
@@ -37,10 +46,12 @@ public class TaskManager : MonoBehaviour
     [SerializeField] private GameObject phase3TextsRoot;
     [SerializeField] private GameObject phase4TextsRoot;
 
+    // Feedback curto mostrado durante a exploração livre.
     [Header("Fase 1 - Progresso temporário")]
     [SerializeField, Min(0.5f)] private float phase1ProgressDisplaySeconds = 3f;
     [SerializeField] private string phase1ProgressFormat = "Divisões exploradas: {0}/{1}";
 
+    // Definições usadas quando a experiência regressa ao ponto inicial entre fases.
     [Header("Fim da Fase 1")]
     [SerializeField] private string initialSceneName;
     [SerializeField] private string initialSpawnID = "Spawn_Initial";
@@ -48,6 +59,7 @@ public class TaskManager : MonoBehaviour
     [SerializeField] private float tutorialCompletionToGuidedDelay = 2.5f;
     [SerializeField] private float phaseStartDelayAfterTeleport = 0.2f;
 
+    // Mensagens de conclusão apresentadas durante transições ou encerramento.
     [Header("Feedback de fim de fase")]
     [SerializeField] private float phaseCompletionMessageHoldSeconds = 2.5f;
     [SerializeField] private string phase1CompletionMessage = "Fase 1 concluida.\n\nBoa exploração.";
@@ -55,17 +67,20 @@ public class TaskManager : MonoBehaviour
     [SerializeField] private string phase3CompletionMessage = "Fase 3 concluida.\n\nCompletaste o jogo da memória.";
     [SerializeField] private string phase4CompletionMessage = "Fase 4 concluida.\n\nObrigado por participares na experiência.\n\nJá podes retirar os óculos.";
 
+    // Integração com o controlador da fase de memória.
     [Header("Fase 3 - Memória na Sala de Jantar")]
     [SerializeField] private bool startDiningMemoryPhaseAfterPhase2 = true;
     [SerializeField] private DiningMemoryPhaseController diningMemoryPhaseController;
     [SerializeField] private float guidedCompletionDisplaySeconds = 2.5f;
     [SerializeField] private float guidedTaskStartGraceSeconds = 1.25f;
 
+    // Integração com o controlador da tarefa exterior.
     [Header("Fase 4 - Alimentos no Exterior")]
     [SerializeField] private bool startOutdoorFoodPhaseAfterMemory = true;
     [SerializeField] private OutdoorFoodPhaseController outdoorFoodPhaseController;
     [SerializeField] private float memoryCompletionToOutdoorDelay = 2.5f;
 
+    // Opções de sessão e recolha de métricas.
     [Header("Métricas")]
     [Tooltip("Pede o ID do participante através de um teclado numérico ao iniciar a aplicação.")]
     [SerializeField] private bool requestParticipantIdOnStartup = true;
@@ -74,14 +89,19 @@ public class TaskManager : MonoBehaviour
     [SerializeField] private bool collectPhase1DistanceTravelled = false;
     [SerializeField, Min(0.1f)] private float distanceSampleInterval = 0.5f;
 
+    // Estado de cena e progresso da navegação.
     private RoomZone[] rooms;
     private string currentRoomID;
     private GlobalRoomData targetRoomData;
     private GamePhase currentPhase = GamePhase.TutorialExploration;
+
+    // Nomes esperados para reencontrar textos mesmo depois de carregar outra cena.
     private const string Phase1TextsRootName = "Texts1Fase";
     private const string Phase2TextsRootName = "Texts2Fase";
     private const string Phase3TextsRootName = "Texts3Fase";
     private const string Phase4TextsRootName = "Texts4Fase";
+
+    // Sequência fixa das tarefas de navegação guiada.
     private static readonly string[] GuidedTaskRoomOrder =
     {
         "floor2_bathroom2",
@@ -91,17 +111,23 @@ public class TaskManager : MonoBehaviour
         "floor1_livingroom"
     };
 
+    // Conjuntos usados para saber que divisões existem e quais já foram visitadas.
     private readonly HashSet<string> allRoomIDs = new HashSet<string>();
     private readonly HashSet<string> visitedRoomIDs = new HashSet<string>();
 
+    // Estado da fase de navegação guiada.
     private List<GlobalRoomData> taskOrder = new List<GlobalRoomData>();
     private int currentTaskIndex = 0;
     private int totalTaskCount = 0;
     private bool allTasksCompleted = false;
+
+    // Flags e rotinas que impedem duplicação de sequências assíncronas.
     private bool tutorialEndSequenceRunning = false;
     private Coroutine guidedCompletionRoutine;
     private Coroutine outdoorFoodStartRoutine;
     private Coroutine phase1ProgressRoutine;
+
+    // Estado das fases especializadas e das métricas.
     private bool diningMemoryPhaseStarted = false;
     private bool diningMemoryPhaseCompleted = false;
     private bool outdoorFoodPhaseStarted = false;
@@ -112,6 +138,8 @@ public class TaskManager : MonoBehaviour
     private float guidedTasksBlockedUntil = -1f;
     private DiningMemoryPhaseController subscribedDiningMemoryPhaseController;
     private OutdoorFoodPhaseController subscribedOutdoorFoodPhaseController;
+
+    // UI temporária criada em runtime para mostrar progresso da exploração.
     private GameObject phase1ProgressRoot;
     private TMP_Text phase1ProgressText;
     private Camera phase1ProgressCamera;
@@ -120,6 +148,7 @@ public class TaskManager : MonoBehaviour
     private Texture2D phase1ProgressRoundedTexture;
     private Sprite phase1ProgressRoundedSprite;
 
+    // Singleton persistente que coordena a experiência entre cenas.
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -132,6 +161,7 @@ public class TaskManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
     }
 
+    // Prepara catálogo, referências de controladores e início da sessão de métricas.
     private void Start()
     {
         BuildGlobalRoomCatalog();
@@ -145,6 +175,7 @@ public class TaskManager : MonoBehaviour
             StartMetricsSession(fallbackParticipantId);
     }
 
+    // Limpa subscrições e recursos gráficos criados em runtime.
     private void OnDestroy()
     {
         UnsubscribeDiningMemoryPhaseEvents();
@@ -163,6 +194,7 @@ public class TaskManager : MonoBehaviour
             Destroy(phase1ProgressRoundedTexture);
     }
 
+    // Recebe as RoomZone da cena atual e reaplica o estado visual correto.
     public void SetSceneRooms(RoomZone[] newRooms)
     {
         rooms = newRooms;
@@ -206,6 +238,7 @@ public class TaskManager : MonoBehaviour
         HighlightTargetIfPresentInCurrentScene();
     }
 
+    // Ponto de entrada central para todas as deteções de divisão.
     public void PlayerEnteredRoom(RoomZone room)
     {
         if (room == null)
@@ -252,6 +285,7 @@ public class TaskManager : MonoBehaviour
         }
     }
 
+    // Constrói o conjunto de divisões únicas necessárias para terminar a fase 1.
     private void BuildGlobalRoomCatalog()
     {
         allRoomIDs.Clear();
@@ -271,6 +305,7 @@ public class TaskManager : MonoBehaviour
 
     }
 
+    // Abre uma sessão de métricas e processa uma entrada de divisão que tenha ficado pendente.
     public void StartMetricsSession(string participantId)
     {
         if (metricsSessionStarted)
@@ -292,6 +327,7 @@ public class TaskManager : MonoBehaviour
         }
     }
 
+    // Regista visitas da exploração livre e termina a fase quando todas as divisões foram vistas.
     private void HandleTutorialRoomVisit(RoomZone room)
     {
         if (tutorialEndSequenceRunning)
@@ -315,6 +351,7 @@ public class TaskManager : MonoBehaviour
         }
     }
 
+    // Espera a mensagem final da exploração e arranca a navegação guiada.
     private IEnumerator FinishTutorialThenStartPhase2()
     {
         tutorialEndSequenceRunning = true;
@@ -329,6 +366,7 @@ public class TaskManager : MonoBehaviour
         tutorialEndSequenceRunning = false;
     }
 
+    // Inicia métricas da fase 2 depois de o jogador regressar ao ponto inicial.
     private void BeginGuidedMetrics()
     {
         if (guidedMetricsStarted)
@@ -345,6 +383,7 @@ public class TaskManager : MonoBehaviour
         }
     }
 
+    // Muda para navegação guiada e prepara a lista de destinos.
     private void StartGuidedNavigationPhase()
     {
         if (currentPhase == GamePhase.GuidedNavigation)
@@ -356,6 +395,7 @@ public class TaskManager : MonoBehaviour
         BuildTaskList();
     }
 
+    // Reposiciona o jogador no spawn inicial antes de executar a ação seguinte.
     private IEnumerator ReturnToInitialSpawnThen(string transitionMessage, System.Action afterReturn)
     {
         if (!returnToInitialSpawnBetweenPhases)
@@ -403,6 +443,7 @@ public class TaskManager : MonoBehaviour
         afterReturn?.Invoke();
     }
 
+    // Cria a lista ordenada de tarefas a partir do catálogo global.
     private void BuildTaskList()
     {
         taskOrder.Clear();
@@ -444,6 +485,7 @@ public class TaskManager : MonoBehaviour
         SetNextTaskFromList();
     }
 
+    // Reaplica marcas de divisões já visitadas quando uma cena é carregada.
     private void ApplyVisitedMarksInCurrentScene()
     {
         if (rooms == null)
@@ -459,6 +501,7 @@ public class TaskManager : MonoBehaviour
         }
     }
 
+    // Remove marcas visuais de exploração quando a fase muda.
     private void ClearAllVisitedMarksInCurrentScene()
     {
         if (rooms == null)
@@ -471,6 +514,7 @@ public class TaskManager : MonoBehaviour
         }
     }
 
+    // Atualiza uma divisão específica se ela estiver presente na cena atual.
     private void SetVisitedMarkForRoomIDInCurrentScene(string roomID, bool state)
     {
         if (rooms == null || string.IsNullOrWhiteSpace(roomID))
@@ -486,6 +530,7 @@ public class TaskManager : MonoBehaviour
         }
     }
 
+    // Escolhe o próximo destino da navegação ou termina a fase 2.
     private void SetNextTaskFromList()
     {
         ClearAllHighlights();
@@ -540,6 +585,7 @@ public class TaskManager : MonoBehaviour
         guidedCompletionRoutine = StartCoroutine(CompleteGuidedPhaseThenStartNext());
     }
 
+    // Mantém o feedback de conclusão visível antes de arrancar a fase de memória.
     private IEnumerator CompleteGuidedPhaseThenStartNext()
     {
         if (guidedCompletionDisplaySeconds > 0f)
@@ -562,6 +608,7 @@ public class TaskManager : MonoBehaviour
         guidedCompletionRoutine = null;
     }
 
+    // Ativa a máquina de estados da fase de memória quando estiver disponível.
     private bool TryStartDiningMemoryPhase()
     {
         if (!startDiningMemoryPhaseAfterPhase2)
@@ -589,6 +636,7 @@ public class TaskManager : MonoBehaviour
         return true;
     }
 
+    // Resolve o controlador de memória e garante a subscrição do evento de conclusão.
     private void EnsureDiningMemoryControllerReference()
     {
         if (diningMemoryPhaseController == null)
@@ -597,6 +645,7 @@ public class TaskManager : MonoBehaviour
         SubscribeDiningMemoryPhaseEvents();
     }
 
+    // Permite que o controlador exterior se registe quando a cena do exterior é carregada.
     public void RegisterOutdoorFoodPhaseController(OutdoorFoodPhaseController controller)
     {
         if (controller == null)
@@ -613,6 +662,7 @@ public class TaskManager : MonoBehaviour
             outdoorFoodPhaseController.BeginPhase(resetSavedProgress: false);
     }
 
+    // Resolve o controlador de alimentos e garante a subscrição do evento de conclusão.
     private void EnsureOutdoorFoodControllerReference()
     {
         if (outdoorFoodPhaseController == null)
@@ -621,6 +671,7 @@ public class TaskManager : MonoBehaviour
         SubscribeOutdoorFoodPhaseEvents();
     }
 
+    // Liga o evento de conclusão da fase de memória ao gestor global.
     private void SubscribeDiningMemoryPhaseEvents()
     {
         if (subscribedDiningMemoryPhaseController == diningMemoryPhaseController)
@@ -635,6 +686,7 @@ public class TaskManager : MonoBehaviour
         subscribedDiningMemoryPhaseController.PhaseCompleted += OnDiningMemoryPhaseCompleted;
     }
 
+    // Remove a ligação ao controlador de memória anterior.
     private void UnsubscribeDiningMemoryPhaseEvents()
     {
         if (subscribedDiningMemoryPhaseController != null)
@@ -643,6 +695,7 @@ public class TaskManager : MonoBehaviour
         subscribedDiningMemoryPhaseController = null;
     }
 
+    // Liga o evento de conclusão da tarefa exterior ao gestor global.
     private void SubscribeOutdoorFoodPhaseEvents()
     {
         if (subscribedOutdoorFoodPhaseController == outdoorFoodPhaseController)
@@ -657,6 +710,7 @@ public class TaskManager : MonoBehaviour
         subscribedOutdoorFoodPhaseController.PhaseCompleted += OnOutdoorFoodPhaseCompleted;
     }
 
+    // Remove a ligação ao controlador exterior anterior.
     private void UnsubscribeOutdoorFoodPhaseEvents()
     {
         if (subscribedOutdoorFoodPhaseController != null)
@@ -665,6 +719,7 @@ public class TaskManager : MonoBehaviour
         subscribedOutdoorFoodPhaseController = null;
     }
 
+    // Fecha métricas da fase 3 e agenda o início da fase exterior.
     private void OnDiningMemoryPhaseCompleted()
     {
         if (diningMemoryPhaseCompleted)
@@ -682,6 +737,7 @@ public class TaskManager : MonoBehaviour
         outdoorFoodStartRoutine = StartCoroutine(StartOutdoorFoodPhaseAfterDelay());
     }
 
+    // Separa visualmente a memória da tarefa exterior com atraso e reposicionamento.
     private IEnumerator StartOutdoorFoodPhaseAfterDelay()
     {
         if (memoryCompletionToOutdoorDelay > 0f)
@@ -691,6 +747,7 @@ public class TaskManager : MonoBehaviour
         outdoorFoodStartRoutine = null;
     }
 
+    // Ativa a fase de alimentos e reinicia o seu progresso lógico.
     private bool TryStartOutdoorFoodPhase()
     {
         if (!startOutdoorFoodPhaseAfterMemory)
@@ -716,6 +773,7 @@ public class TaskManager : MonoBehaviour
         return true;
     }
 
+    // Fecha a sessão completa e apresenta a mensagem final da experiência.
     private void OnOutdoorFoodPhaseCompleted()
     {
         outdoorFoodPhaseCompleted = true;
@@ -728,6 +786,7 @@ public class TaskManager : MonoBehaviour
             SceneTransitionManager.Instance.ShowFinalMessage(phase4CompletionMessage, phaseCompletionMessageHoldSeconds);
     }
 
+    // Liga o destaque apenas à RoomZone que corresponde ao destino atual.
     private void HighlightTargetIfPresentInCurrentScene()
     {
         if (targetRoomData == null || rooms == null)
@@ -743,6 +802,7 @@ public class TaskManager : MonoBehaviour
         }
     }
 
+    // Remove destaques de todas as divisões da cena atual.
     private void ClearAllHighlights()
     {
         if (rooms == null)
@@ -755,6 +815,7 @@ public class TaskManager : MonoBehaviour
         }
     }
 
+    // Resolve referências de texto e mostra apenas o bloco da fase ativa.
     private void RefreshPhaseTextsVisibility()
     {
         ResolvePhaseTextRoots();
@@ -767,6 +828,7 @@ public class TaskManager : MonoBehaviour
         SetPhaseTextRootVisible(phase4TextsRoot, currentPhase == GamePhase.OutdoorFood && !outdoorFoodPhaseCompleted);
     }
 
+    // Procura raízes de texto por nome, incluindo objetos inativos.
     private void ResolvePhaseTextRoots()
     {
         if (phase1TextsRoot == null)
@@ -782,6 +844,7 @@ public class TaskManager : MonoBehaviour
             phase4TextsRoot = FindGameObjectByNameIncludingInactive(Phase4TextsRootName);
     }
 
+    // Resolve o TMP_Text usado pela lista da fase 2 quando a cena muda.
     private void ResolvePhaseTextComponents()
     {
         if (phase2TaskListText != null)
@@ -795,6 +858,7 @@ public class TaskManager : MonoBehaviour
             phase2TaskListText = phase2TextsRoot.GetComponentInChildren<TMP_Text>(true);
     }
 
+    // Descarta referências de UI pertencentes à cena anterior.
     private void ClearScenePhaseTextReferences()
     {
         phase1TextsRoot = null;
@@ -804,6 +868,7 @@ public class TaskManager : MonoBehaviour
         phase2TaskListText = null;
     }
 
+    // Reescreve a lista de tarefas guiadas mostrada ao utilizador.
     private void UpdatePhase2TaskListText()
     {
         if (phase2TaskListText == null)
@@ -841,6 +906,7 @@ public class TaskManager : MonoBehaviour
         phase2TaskListText.text = builder.ToString();
     }
 
+    // Aplica visibilidade sem assumir que a raiz existe em todas as cenas.
     private void SetPhaseTextRootVisible(GameObject root, bool visible)
     {
         if (root == null)
@@ -850,6 +916,7 @@ public class TaskManager : MonoBehaviour
             root.SetActive(visible);
     }
 
+    // Mostra um popup temporário com o número de divisões exploradas.
     private void ShowPhase1Progress()
     {
         if (currentPhase != GamePhase.TutorialExploration || allRoomIDs.Count == 0)
@@ -873,6 +940,7 @@ public class TaskManager : MonoBehaviour
         phase1ProgressRoutine = StartCoroutine(HidePhase1ProgressAfterDelay());
     }
 
+    // Esconde o popup da fase 1 depois do tempo configurado.
     private IEnumerator HidePhase1ProgressAfterDelay()
     {
         yield return new WaitForSeconds(phase1ProgressDisplaySeconds);
@@ -883,6 +951,7 @@ public class TaskManager : MonoBehaviour
         phase1ProgressRoutine = null;
     }
 
+    // Cria em runtime uma UI world-space presa à câmara principal.
     private void EnsurePhase1ProgressUI()
     {
         Camera targetCamera = Camera.main;
@@ -990,6 +1059,7 @@ public class TaskManager : MonoBehaviour
         phase1ProgressRoot.SetActive(false);
     }
 
+    // Gera uma sprite simples com cantos arredondados para o painel do popup.
     private void EnsurePhase1ProgressRoundedSprite()
     {
         if (phase1ProgressRoundedSprite != null)
@@ -1039,6 +1109,7 @@ public class TaskManager : MonoBehaviour
         phase1ProgressRoundedSprite.name = "Phase 1 Progress Rounded Rectangle";
     }
 
+    // Procura objetos por nome mesmo quando estão inativos.
     private GameObject FindGameObjectByNameIncludingInactive(string objectName)
     {
         if (string.IsNullOrWhiteSpace(objectName))

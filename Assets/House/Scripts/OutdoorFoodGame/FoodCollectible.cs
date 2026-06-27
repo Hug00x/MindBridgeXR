@@ -4,27 +4,37 @@ using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
+/*
+ * Representa um alimento físico que o jogador pode agarrar no exterior.
+ * Guarda a posição inicial, comunica eventos de interação ao sistema de
+ * métricas e permite devolver o objeto ao sítio original quando a entrega falha.
+ */
 public class FoodCollectible : MonoBehaviour
 {
+    // Dados de identificação usados pela lógica de entrega e pelos relatórios.
     [Header("Food")]
     [SerializeField] private FoodType foodType;
     [SerializeField] private string displayName;
     [Tooltip("ID usado nas métricas. Se ficar vazio, será usado o nome do GameObject.")]
     [SerializeField] private string metricsID;
 
+    // Configuração do comportamento depois de uma entrega ou rejeição.
     [Header("Return")]
     [SerializeField] private float returnToStartDuration = 0.35f;
     [SerializeField] private bool deactivateWhenDelivered = true;
 
+    // Propriedades públicas usadas pelo controlador da fase e pela zona de entrega.
     public FoodType FoodType => foodType;
     public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? foodType.ToString() : displayName;
     public string MetricsId => string.IsNullOrWhiteSpace(metricsID) ? gameObject.name : metricsID;
     public bool IsHeld { get; private set; }
     public bool IsDelivered { get; private set; }
 
+    // Eventos emitidos quando o XR Interaction Toolkit agarra ou larga o alimento.
     public event Action<FoodCollectible> Grabbed;
     public event Action<FoodCollectible> Released;
 
+    // Referências e estado necessários para restaurar o alimento.
     private XRGrabInteractable grabInteractable;
     private Rigidbody rb;
     private Transform startParent;
@@ -35,6 +45,7 @@ public class FoodCollectible : MonoBehaviour
     private bool returnRoutinePreviousKinematic;
     private bool hasCachedStartPose;
 
+    // Inicializa referências locais e memoriza a posição de origem.
     private void Awake()
     {
         grabInteractable = GetComponent<XRGrabInteractable>();
@@ -42,6 +53,7 @@ public class FoodCollectible : MonoBehaviour
         CacheStartPose();
     }
 
+    // Liga os eventos de seleção do XR Interaction Toolkit.
     private void OnEnable()
     {
         if (grabInteractable != null)
@@ -51,6 +63,7 @@ public class FoodCollectible : MonoBehaviour
         }
     }
 
+    // Remove subscrições para evitar chamadas sobre objetos desativados.
     private void OnDisable()
     {
         if (grabInteractable != null)
@@ -60,6 +73,7 @@ public class FoodCollectible : MonoBehaviour
         }
     }
 
+    // Memoriza a posição, rotação e hierarquia inicial do alimento.
     public void CacheStartPose()
     {
         startParent = transform.parent;
@@ -68,6 +82,7 @@ public class FoodCollectible : MonoBehaviour
         hasCachedStartPose = true;
     }
 
+    // Confirma uma entrega correta e esconde o alimento se a fase assim o pedir.
     public void MarkDelivered()
     {
         IsDelivered = true;
@@ -86,6 +101,7 @@ public class FoodCollectible : MonoBehaviour
             gameObject.SetActive(false);
     }
 
+    // Repõe completamente o alimento para reutilizar a fase desde o início.
     public void ResetToStart()
     {
         if (!hasCachedStartPose)
@@ -110,6 +126,7 @@ public class FoodCollectible : MonoBehaviour
         }
     }
 
+    // Inicia uma animação curta de retorno após rejeição na zona de entrega.
     public void ReturnToStart()
     {
         if (!gameObject.activeInHierarchy)
@@ -121,6 +138,7 @@ public class FoodCollectible : MonoBehaviour
         returnRoutine = StartCoroutine(ReturnToStartRoutine());
     }
 
+    // Marca o alimento como agarrado e regista a ação nas métricas.
     private void OnSelectEntered(SelectEnterEventArgs args)
     {
         IsHeld = true;
@@ -132,6 +150,7 @@ public class FoodCollectible : MonoBehaviour
         Grabbed?.Invoke(this);
     }
 
+    // Marca o alimento como largado e informa se a largada resultou em entrega.
     private void OnSelectExited(SelectExitEventArgs args)
     {
         IsHeld = false;
@@ -139,6 +158,7 @@ public class FoodCollectible : MonoBehaviour
         MetricsManager.Instance?.RecordFoodReleased(this, IsDelivered);
     }
 
+    // Interpola suavemente o objeto até à pose inicial sem interferência física.
     private IEnumerator ReturnToStartRoutine()
     {
         Vector3 fromPosition = transform.position;
@@ -183,6 +203,7 @@ public class FoodCollectible : MonoBehaviour
         returnRoutine = null;
     }
 
+    // Cancela o retorno em curso e repõe o estado físico temporariamente alterado.
     private void StopReturnRoutine()
     {
         if (returnRoutine != null)
@@ -194,6 +215,7 @@ public class FoodCollectible : MonoBehaviour
         RestoreReturnRigidbodyState();
     }
 
+    // Devolve o Rigidbody ao modo cinemático que tinha antes da animação.
     private void RestoreReturnRigidbodyState()
     {
         if (!returnRoutineChangedKinematic || rb == null)

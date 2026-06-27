@@ -2,21 +2,30 @@ using System;
 using System.Collections;
 using UnityEngine;
 
+/*
+ * Representa uma carta individual do jogo de memória 3D.
+ * Guarda o identificador do par, estado de revelação/correspondência e anima
+ * a rotação da carta preservando a posição visual no tabuleiro.
+ */
 public class MemoryCard3D : MonoBehaviour
 {
+    // Identificação usada para validar pares e gerar métricas legíveis.
     [Header("Identificação")]
     [SerializeField] private string pairID;
     [Tooltip("ID usado nas métricas. Se ficar vazio, será usado o nome do GameObject.")]
     [SerializeField] private string metricsID;
 
+    // Visuais opcionais para projetos que preferem alternar frente/costas por GameObject.
     [Header("Visual (Opcional)")]
     [SerializeField] private GameObject frontVisual;
     [SerializeField] private GameObject backVisual;
     [SerializeField] private bool useFrontBackToggle = false;
 
+    // Permite cartas especiais que participam na interação mas não bloqueiam a conclusão.
     [Header("Regras")]
     [SerializeField] private bool excludeFromCompletion;
 
+    // Configuração da animação de virar a carta.
     [Header("Flip por rotação")]
     [SerializeField] private bool useRotationFlip = true;
     [SerializeField] private float revealedXAngle = 0f;
@@ -43,12 +52,14 @@ public class MemoryCard3D : MonoBehaviour
     private bool hasVisualAnchor;
     private Coroutine flipRoutine;
 
+    // Captura a pose inicial e aplica o estado visual configurado para início.
     private void Start()
     {
         CacheBasePose();
         SetRevealState(!startsFaceDown);
     }
 
+    // Guarda a pose base para animações e correções posteriores.
     public void CacheBasePose()
     {
         baseLocalPosition = transform.localPosition;
@@ -56,6 +67,7 @@ public class MemoryCard3D : MonoBehaviour
         CacheVisualAnchor();
     }
 
+    // Ponto chamado pela ponte XR quando o jogador seleciona a carta.
     public void NotifySelected()
     {
         if (IsMatched || IsRevealed)
@@ -64,6 +76,7 @@ public class MemoryCard3D : MonoBehaviour
         Selected?.Invoke(this);
     }
 
+    // API usada pelo controlador para revelar, ocultar, combinar ou reiniciar a carta.
     public void Reveal()
     {
         if (IsMatched)
@@ -92,6 +105,7 @@ public class MemoryCard3D : MonoBehaviour
         SetRevealState(false);
     }
 
+    // Revela a carta de forma imediata, sem animação, para preparação ou pré-visualização.
     public void SetInstantReveal(bool revealed)
     {
         IsRevealed = revealed;
@@ -111,6 +125,7 @@ public class MemoryCard3D : MonoBehaviour
         ApplyOptionalVisuals(revealed);
     }
 
+    // Escolhe entre animação e aplicação instantânea do estado visual.
     private void SetRevealState(bool revealed)
     {
         IsRevealed = revealed;
@@ -142,6 +157,7 @@ public class MemoryCard3D : MonoBehaviour
         ApplyOptionalVisuals(revealed);
     }
 
+    // Interpola rotação e posição até ao ângulo de revelação/ocultação.
     private IEnumerator AnimateFlipRoutine(float targetX, bool revealed)
     {
         Quaternion startRotation = transform.localRotation;
@@ -169,17 +185,20 @@ public class MemoryCard3D : MonoBehaviour
         flipRoutine = null;
     }
 
+    // Aplica imediatamente a rotação calculada a partir da pose base.
     private void SnapToAngle(float targetX)
     {
         transform.localRotation = GetRotationFromBase(targetX);
         transform.localPosition = baseLocalPosition;
     }
 
+    // Calcula uma rotação relativa à orientação inicial da carta.
     private Quaternion GetRotationFromBase(float xOffset)
     {
         return baseLocalRotation * Quaternion.Euler(xOffset, 0f, 0f);
     }
 
+    // Eleva ligeiramente cartas ocultas para evitar interferência visual com o tabuleiro.
     private Vector3 GetPositionForState(bool revealed)
     {
         if (revealed || Mathf.Approximately(hiddenYOffset, 0f))
@@ -194,6 +213,7 @@ public class MemoryCard3D : MonoBehaviour
         return baseLocalPosition + parentTransform.InverseTransformVector(worldLift);
     }
 
+    // Guarda um ponto visual estável para compensar deslocações durante o flip.
     private void CacheVisualAnchor()
     {
         hasVisualAnchor = TryGetVisualBoundsCenter(out baseVisualAnchorWorld);
@@ -207,6 +227,7 @@ public class MemoryCard3D : MonoBehaviour
         }
     }
 
+    // Usa os renderers filhos para estimar o centro visual da carta.
     private bool TryGetVisualBoundsCenter(out Vector3 center)
     {
         Renderer[] renderers = GetComponentsInChildren<Renderer>();
@@ -233,6 +254,7 @@ public class MemoryCard3D : MonoBehaviour
         return hasBounds;
     }
 
+    // Corrige X/Z para que a carta pareça virar no lugar.
     private void ApplyFlipPositionCorrection(bool revealed)
     {
         if (!preserveWorldXZDuringFlip || !hasVisualAnchor)
@@ -253,6 +275,7 @@ public class MemoryCard3D : MonoBehaviour
             transform.position += correction;
     }
 
+    // Recalcula a âncora base no espaço mundial atual do pai.
     private Vector3 GetCurrentBaseVisualAnchorWorld()
     {
         return transform.parent != null
@@ -260,6 +283,7 @@ public class MemoryCard3D : MonoBehaviour
             : baseVisualAnchorParentLocal;
     }
 
+    // Alterna visuais opcionais de frente/costas quando esse modo está ativo.
     private void ApplyOptionalVisuals(bool revealed)
     {
         if (!useFrontBackToggle)
@@ -268,7 +292,7 @@ public class MemoryCard3D : MonoBehaviour
         if (frontVisual == null && backVisual == null)
             return;
 
-        // If both fields point to the same object, keep it visible and rely on rotation flip only.
+        // Se frente e costas forem o mesmo objeto, a rotação já resolve o estado visual.
         if (frontVisual != null && frontVisual == backVisual)
         {
             frontVisual.SetActive(true);

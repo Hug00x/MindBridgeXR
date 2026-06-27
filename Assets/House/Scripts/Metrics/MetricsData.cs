@@ -1,9 +1,15 @@
 using System;
 using System.Collections.Generic;
 
+/*
+ * Modelos serializáveis usados pelo sistema de métricas do MindBridgeXR.
+ * Estas classes guardam os tempos, eventos, resultados por fase e dados
+ * necessários para exportar relatórios JSON, CSV e texto.
+ */
 [Serializable]
 public class SessionMetricsData
 {
+    // Identificação da sessão e contexto técnico da execução.
     public string participantId;
     public string sessionId;
     public string experienceStartedUtc;
@@ -21,6 +27,8 @@ public class SessionMetricsData
     public float totalInterruptionDurationSeconds;
     public int totalSceneChanges;
     public int completedPhaseCount;
+
+    // Resultados agregados e detalhados de todas as fases da experiência.
     public List<string> completedPhases = new List<string>();
     public List<InterruptionMetric> interruptions = new List<InterruptionMetric>();
     public Phase1MetricsData phase1 = new Phase1MetricsData();
@@ -32,6 +40,7 @@ public class SessionMetricsData
 [Serializable]
 public class PhaseTimingMetric
 {
+    // Janela temporal comum a qualquer fase da experiência.
     public string phaseName;
     public string startedUtc;
     public string endedUtc;
@@ -42,6 +51,7 @@ public class PhaseTimingMetric
 [Serializable]
 public class InterruptionMetric
 {
+    // Regista pausas, perda de foco ou interrupções da aplicação.
     public string reason;
     public string phase;
     public string startedUtc;
@@ -52,6 +62,7 @@ public class InterruptionMetric
 [Serializable]
 public class RoomVisitMetric
 {
+    // Entrada individual numa divisão durante a exploração livre.
     public int order;
     public string roomId;
     public string sceneName;
@@ -62,6 +73,7 @@ public class RoomVisitMetric
 [Serializable]
 public class RoomAggregateMetric
 {
+    // Estatísticas acumuladas por divisão visitada.
     public string roomId;
     public float firstDiscoverySeconds = -1f;
     public int visitCount;
@@ -72,6 +84,7 @@ public class RoomAggregateMetric
 [Serializable]
 public class Phase1MetricsData
 {
+    // Métricas da exploração livre da casa.
     public PhaseTimingMetric timing = new PhaseTimingMetric();
     public float timeToFirstRoomSeconds = -1f;
     public int uniqueRoomsVisited;
@@ -86,6 +99,7 @@ public class Phase1MetricsData
 [Serializable]
 public class GuidedTaskMetric
 {
+    // Resultado de uma tarefa de navegação guiada.
     public int taskIndex;
     public string targetRoomId;
     public string startedUtc;
@@ -100,6 +114,7 @@ public class GuidedTaskMetric
 [Serializable]
 public class Phase2MetricsData
 {
+    // Métricas agregadas das tarefas de navegação guiada.
     public PhaseTimingMetric timing = new PhaseTimingMetric();
     public int completedTasks;
     public float averageTaskTimeSeconds;
@@ -115,6 +130,7 @@ public class Phase2MetricsData
 [Serializable]
 public class CardSelectionMetric
 {
+    // Contador de seleções por carta no jogo da memória.
     public string cardId;
     public int selectionCount;
 }
@@ -122,6 +138,7 @@ public class CardSelectionMetric
 [Serializable]
 public class MemoryAttemptMetric
 {
+    // Resultado de uma tentativa de correspondência no jogo da memória.
     public int attemptIndex;
     public float durationSeconds;
     public bool correct;
@@ -131,6 +148,7 @@ public class MemoryAttemptMetric
 [Serializable]
 public class PairFoundMetric
 {
+    // Momento em que um par correto foi descoberto.
     public string pairId;
     public float phaseElapsedSeconds;
     public float gameElapsedSeconds;
@@ -139,6 +157,7 @@ public class PairFoundMetric
 [Serializable]
 public class Phase3MetricsData
 {
+    // Métricas da deslocação até à sala de jantar e do jogo da memória.
     public PhaseTimingMetric timing = new PhaseTimingMetric();
     public float timeToDiningRoomSeconds = -1f;
     public float timeToTableSeconds = -1f;
@@ -159,6 +178,7 @@ public class Phase3MetricsData
 [Serializable]
 public class FoodAggregateMetric
 {
+    // Estatísticas acumuladas por alimento manipulável.
     public string foodId;
     public string foodType;
     public int grabCount;
@@ -170,6 +190,7 @@ public class FoodAggregateMetric
 [Serializable]
 public class FoodDeliveryAttemptMetric
 {
+    // Registo individual de uma tentativa de entrega de alimento.
     public int attemptOrder;
     public int acceptedOrder;
     public string foodId;
@@ -184,6 +205,7 @@ public class FoodDeliveryAttemptMetric
 [Serializable]
 public class Phase4MetricsData
 {
+    // Métricas da recolha da lista e entrega de alimentos no exterior.
     public PhaseTimingMetric timing = new PhaseTimingMetric();
     public float timeToListPickupSeconds = -1f;
     public int sceneChangesUntilListPickup;
@@ -206,6 +228,7 @@ public class Phase4MetricsData
 [Serializable]
 public class MetricEventRecord
 {
+    // Evento cronológico usado para reconstruir a sessão em detalhe.
     public string utcTimestamp;
     public float sessionElapsedSeconds;
     public string eventType;
@@ -217,6 +240,7 @@ public class MetricEventRecord
 [Serializable]
 public class MetricEventField
 {
+    // Par chave/valor associado a um evento registado.
     public string key;
     public string value;
 

@@ -2,8 +2,14 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+/*
+ * Controla a fase exterior de recolha e entrega de alimentos.
+ * Gere o estado da missão, valida a lista de alimentos pedidos, atualiza
+ * indicadores diegéticos, regista métricas e preserva progresso entre cenas.
+ */
 public class OutdoorFoodPhaseController : MonoBehaviour
 {
+    // Estados principais da fase exterior.
     private enum OutdoorFoodPhaseState
     {
         Inactive,
@@ -15,6 +21,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     [Serializable]
     public class FoodRequirement
     {
+        // Quantidade pedida de um determinado tipo de alimento.
         public FoodType foodType;
         public string displayName;
         [Min(1)] public int requiredCount = 1;
@@ -32,34 +39,41 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     [Serializable]
     public class PlateDisplay
     {
+        // Prefab e slots usados para mostrar alimentos já entregues no prato.
         public FoodType foodType;
         public GameObject visualPrefab;
         public Transform[] slots;
     }
 
+    // Opções gerais de reinício da fase.
     [Header("Objective")]
     [SerializeField] private bool resetFoodOnBegin = true;
 
+    // Proteção contra múltiplos colliders processarem a mesma entrega.
     [Header("Delivery Protection")]
     [Tooltip("Impede que a mesma colocação seja processada várias vezes por colliders diferentes.")]
     [SerializeField, Min(0f)] private float deliveryAttemptCooldownSeconds = 1f;
 
+    // Referências do cenário usadas para guiar o jogador.
     [Header("Diegetic References")]
     [SerializeField] private FoodListPickup foodListPickup;
     [SerializeField] private FoodDeliveryZone deliveryZone;
     [SerializeField] private GameObject listArrowIndicator;
     [SerializeField] private GameObject tableHighlight;
 
+    // Configuração dos objetos visuais que aparecem no prato após entregas.
     [Header("Plate Displays")]
     [SerializeField] private GameObject plateDisplaysRoot;
     [SerializeField] private List<PlateDisplay> plateDisplays = new List<PlateDisplay>();
 
+    // Feedback sonoro para aceitar, rejeitar ou completar a fase.
     [Header("Audio")]
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private AudioClip acceptedClip;
     [SerializeField] private AudioClip rejectedClip;
     [SerializeField] private AudioClip completionClip;
 
+    // Lista de alimentos exigidos para terminar a fase.
     [Header("Requirements")]
     [SerializeField] private List<FoodRequirement> requirements = new List<FoodRequirement>
     {
@@ -72,6 +86,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         new FoodRequirement(FoodType.Tomato, "tomate", 4)
     };
 
+    // Estado runtime e progresso preservado entre transições de cena.
     private OutdoorFoodPhaseState state = OutdoorFoodPhaseState.Inactive;
     private readonly List<GameObject> spawnedPlateVisuals = new List<GameObject>();
     private readonly Dictionary<int, double> lastDeliveryAttemptTimes = new Dictionary<int, double>();
@@ -82,8 +97,10 @@ public class OutdoorFoodPhaseController : MonoBehaviour
     public bool IsRunning => state != OutdoorFoodPhaseState.Inactive && state != OutdoorFoodPhaseState.Completed;
     public bool HasListBeenPickedUp => state == OutdoorFoodPhaseState.DeliverFood || state == OutdoorFoodPhaseState.Completed;
 
+    // Evento usado pelo TaskManager para avançar quando todos os alimentos foram entregues.
     public event Action PhaseCompleted;
 
+    // Liga referências, esconde orientação inativa e regista o controlador no TaskManager.
     private void OnEnable()
     {
         ResolveReferences();
@@ -94,11 +111,13 @@ public class OutdoorFoodPhaseController : MonoBehaviour
             TaskManager.Instance.RegisterOutdoorFoodPhaseController(this);
     }
 
+    // Remove subscrições antes do controlador sair de cena.
     private void OnDisable()
     {
         UnsubscribeEvents();
     }
 
+    // Inicia a fase e decide se começa do zero ou restaura progresso guardado.
     public void BeginPhase(bool resetSavedProgress = true)
     {
         if (IsRunning)
@@ -136,6 +155,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
             ChangeState(OutdoorFoodPhaseState.FindFoodList);
     }
 
+    // Valida uma tentativa de entrega e devolve a ação física que a zona deve aplicar.
     public FoodDeliveryResult TryDeliverFood(FoodCollectible food)
     {
         if (food == null || food.IsDelivered)
@@ -198,6 +218,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         return FoodDeliveryResult.Accepted;
     }
 
+    // Bloqueia tentativas repetidas causadas pela sobreposição de colliders.
     private bool TryBeginDeliveryAttempt(FoodCollectible food)
     {
         int foodInstanceId = food.GetInstanceID();
@@ -214,6 +235,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         return true;
     }
 
+    // Liga eventos dos objetos de lista e zona de entrega.
     private void SubscribeEvents()
     {
         if (foodListPickup != null)
@@ -223,12 +245,14 @@ public class OutdoorFoodPhaseController : MonoBehaviour
             deliveryZone.SetPhaseController(this);
     }
 
+    // Remove eventos da lista para evitar callbacks duplicados.
     private void UnsubscribeEvents()
     {
         if (foodListPickup != null)
             foodListPickup.PickedUp -= OnFoodListPickedUp;
     }
 
+    // Passa da procura da lista para a etapa de entregas.
     private void OnFoodListPickedUp()
     {
         if (state != OutdoorFoodPhaseState.FindFoodList)
@@ -239,6 +263,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         SaveProgress();
     }
 
+    // Atualiza o estado e liga/desliga os indicadores visuais adequados.
     private void ChangeState(OutdoorFoodPhaseState newState)
     {
         state = newState;
@@ -263,6 +288,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         }
     }
 
+    // Termina a fase, toca feedback final e avisa o fluxo principal de tarefas.
     private void CompletePhase()
     {
         state = OutdoorFoodPhaseState.Completed;
@@ -273,6 +299,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         PhaseCompleted?.Invoke();
     }
 
+    // Procura referências quando não foram atribuídas manualmente no Inspector.
     private void ResolveReferences()
     {
         if (foodListPickup == null)
@@ -285,6 +312,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
             deliveryZone.SetPhaseController(this);
     }
 
+    // Limpa contadores de entregas e objetos visuais no prato.
     private void ResetProgress()
     {
         foreach (FoodRequirement requirement in requirements)
@@ -296,6 +324,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         ClearPlateDisplays();
     }
 
+    // Guarda o progresso em campos estáticos para sobreviver a mudanças de cena.
     private void SaveProgress()
     {
         savedDeliveredCounts.Clear();
@@ -312,6 +341,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         hasSavedProgress = true;
     }
 
+    // Recupera contadores guardados sem ultrapassar a quantidade necessária.
     private void RestoreSavedProgress()
     {
         ResetProgress();
@@ -326,6 +356,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         }
     }
 
+    // Reconstrói os alimentos visíveis no prato com base no progresso restaurado.
     private void RebuildPlateDisplaysFromProgress()
     {
         ClearPlateDisplays();
@@ -340,6 +371,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         }
     }
 
+    // Apaga o estado estático quando a fase deve começar do zero.
     private void ClearSavedProgress()
     {
         savedDeliveredCounts.Clear();
@@ -347,6 +379,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         hasSavedProgress = false;
     }
 
+    // Repõe todos os alimentos recolhíveis para a pose inicial.
     private void ResetFoodCollectibles()
     {
         FoodCollectible[] foods = FindObjectsByType<FoodCollectible>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
@@ -358,6 +391,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         }
     }
 
+    // Esconde no mundo alimentos que já tinham sido entregues antes da mudança de cena.
     private void HideAlreadyDeliveredFoodsInScene()
     {
         FoodCollectible[] foods = FindObjectsByType<FoodCollectible>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
@@ -382,6 +416,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         }
     }
 
+    // Obtém o requisito associado a um tipo de alimento.
     private FoodRequirement GetRequirement(FoodType foodType)
     {
         foreach (FoodRequirement requirement in requirements)
@@ -393,6 +428,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         return null;
     }
 
+    // Obtém a configuração visual do prato para um tipo de alimento.
     private PlateDisplay GetPlateDisplay(FoodType foodType)
     {
         foreach (PlateDisplay display in plateDisplays)
@@ -404,6 +440,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         return null;
     }
 
+    // Instancia o prefab do alimento no slot correto do prato.
     private void ShowFoodOnPlate(FoodType foodType, int slotIndex)
     {
         PlateDisplay display = GetPlateDisplay(foodType);
@@ -432,6 +469,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
             plateDisplaysRoot.SetActive(true);
     }
 
+    // Remove todos os visuais de alimentos instanciados no prato.
     private void ClearPlateDisplays()
     {
         for (int i = spawnedPlateVisuals.Count - 1; i >= 0; i--)
@@ -450,6 +488,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         spawnedPlateVisuals.Clear();
     }
 
+    // Verifica se todos os requisitos já atingiram a quantidade pedida.
     private bool IsComplete()
     {
         foreach (FoodRequirement requirement in requirements)
@@ -464,6 +503,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         return true;
     }
 
+    // Liga ou desliga a orientação visual até à lista.
     private void SetListArrowVisible(bool visible)
     {
         if (listArrowIndicator != null)
@@ -473,12 +513,14 @@ public class OutdoorFoodPhaseController : MonoBehaviour
             foodListPickup.SetArrowVisible(visible);
     }
 
+    // Liga ou desliga o destaque da mesa de entrega.
     private void SetTableHighlightVisible(bool visible)
     {
         if (tableHighlight != null)
             tableHighlight.SetActive(visible);
     }
 
+    // Garante que indicadores não ficam ativos fora do fluxo da fase.
     private void HidePhaseGuidanceIfInactive()
     {
         if (state == OutdoorFoodPhaseState.Inactive || state == OutdoorFoodPhaseState.Completed)
@@ -488,6 +530,7 @@ public class OutdoorFoodPhaseController : MonoBehaviour
         }
     }
 
+    // Toca um som curto quando existe AudioSource configurado.
     private void PlayOneShot(AudioClip clip)
     {
         if (audioSource != null && clip != null)

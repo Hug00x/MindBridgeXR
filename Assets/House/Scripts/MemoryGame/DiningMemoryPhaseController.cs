@@ -1,8 +1,13 @@
 using System;
 using UnityEngine;
 
+/*
+ * Controla a terceira fase da experiência: chegar à sala de jantar, aproximar-se
+ * da mesa, iniciar o jogo de memória e avisar o TaskManager quando a ronda termina.
+ */
 public class DiningMemoryPhaseController : MonoBehaviour
 {
+    // Estados internos da fase para impedir saltos ou eventos fora de ordem.
     private enum DiningPhaseState
     {
         Inactive,
@@ -12,9 +17,11 @@ public class DiningMemoryPhaseController : MonoBehaviour
         Completed
     }
 
+    // Divisão que deve ser alcançada antes de o jogador poder ir para a mesa.
     [Header("Objetivo")]
     [SerializeField] private string diningRoomID = "DiningRoom";
 
+    // Referências locais usadas para detetar chegada à mesa e iniciar o minijogo.
     [Header("Referências")]
     [SerializeField] private DiningTableZone diningTableZone;
     [SerializeField] private MemoryMiniGame3DController memoryGameController;
@@ -25,17 +32,20 @@ public class DiningMemoryPhaseController : MonoBehaviour
 
     public event Action PhaseCompleted;
 
+    // Resolve referências e subscreve eventos quando a cena fica ativa.
     private void OnEnable()
     {
         ResolveReferences();
         SubscribeEvents();
     }
 
+    // Evita manter subscrições para objetos que podem ser destruídos com a cena.
     private void OnDisable()
     {
         UnsubscribeEvents();
     }
 
+    // Reinicia a fase e obriga o jogador a começar pela sala de jantar.
     public void BeginPhase()
     {
         if (IsRunning)
@@ -51,6 +61,7 @@ public class DiningMemoryPhaseController : MonoBehaviour
         ChangeState(DiningPhaseState.GoToDiningRoom);
     }
 
+    // Chamado pelo TaskManager quando o jogador entra numa divisão.
     public void NotifyPlayerEnteredRoom(string roomID)
     {
         if (state != DiningPhaseState.GoToDiningRoom)
@@ -63,6 +74,7 @@ public class DiningMemoryPhaseController : MonoBehaviour
         ChangeState(DiningPhaseState.GoToTable);
     }
 
+    // Liga eventos locais da mesa e do jogo ao fluxo desta fase.
     private void SubscribeEvents()
     {
         ResolveReferences();
@@ -74,6 +86,7 @@ public class DiningMemoryPhaseController : MonoBehaviour
             memoryGameController.RoundCompleted += OnMemoryRoundCompleted;
     }
 
+    // Remove eventos para impedir notificações duplicadas ao recarregar cenas.
     private void UnsubscribeEvents()
     {
         if (diningTableZone != null)
@@ -83,6 +96,7 @@ public class DiningMemoryPhaseController : MonoBehaviour
             memoryGameController.RoundCompleted -= OnMemoryRoundCompleted;
     }
 
+    // Ao chegar à mesa, regista a métrica e começa o jogo.
     private void OnPlayerArrivedAtTable()
     {
         if (state != DiningPhaseState.GoToTable)
@@ -92,6 +106,7 @@ public class DiningMemoryPhaseController : MonoBehaviour
         ChangeState(DiningPhaseState.PlayMemoryGame);
     }
 
+    // Encaminha a conclusão do minijogo para o coordenador global.
     private void OnMemoryRoundCompleted()
     {
         if (state != DiningPhaseState.PlayMemoryGame)
@@ -101,6 +116,7 @@ public class DiningMemoryPhaseController : MonoBehaviour
         PhaseCompleted?.Invoke();
     }
 
+    // Centraliza transições de estado e efeitos associados.
     private void ChangeState(DiningPhaseState newState)
     {
         state = newState;
@@ -120,6 +136,7 @@ public class DiningMemoryPhaseController : MonoBehaviour
         }
     }
 
+    // Procura automaticamente referências quando não foram ligadas no Inspector.
     private void ResolveReferences()
     {
         if (diningTableZone == null)
@@ -133,6 +150,7 @@ public class DiningMemoryPhaseController : MonoBehaviour
         }
     }
 
+    // Mantido como proteção para casos em que o controlador seja limpo externamente.
     private void EnsureMemoryControllerReference()
     {
         if (memoryGameController == null)

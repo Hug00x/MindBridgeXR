@@ -6,11 +6,18 @@ using System.Linq;
 using System.Text;
 using UnityEngine;
 
+/*
+ * Exportador complementar das métricas recolhidas durante a experiência.
+ * A partir dos resumos JSON, cria uma tabela comparativa para análise e
+ * relatórios individuais em texto com linguagem mais legível.
+ */
 public static class MetricsReportExporter
 {
+    // Cultura portuguesa usada nos números apresentados nos relatórios.
     private static readonly CultureInfo PortugueseCulture =
         CultureInfo.GetCultureInfo("pt-PT");
 
+    // Colunas fixas que aparecem antes das colunas dinâmicas por sala/tarefa/alimento.
     private static readonly string[] BaseComparisonColumns =
     {
         "Participante",
@@ -88,6 +95,7 @@ public static class MetricsReportExporter
         "Fase 4 motivos de rejeição"
     };
 
+    // Ponto de entrada chamado pelo MetricsManager depois de reconstruir os ficheiros base.
     public static void RebuildAll(string metricsDirectory)
     {
         if (string.IsNullOrWhiteSpace(metricsDirectory) || !Directory.Exists(metricsDirectory))
@@ -104,9 +112,11 @@ public static class MetricsReportExporter
         }
         catch (Exception)
         {
+            // A geração de relatórios é complementar e não deve bloquear a sessão.
         }
     }
 
+    // Carrega todos os resumos JSON válidos no diretório de métricas.
     private static List<SessionMetricsData> LoadSessions(string metricsDirectory)
     {
         string[] summaryFiles = Directory.GetFiles(metricsDirectory, "*_summary.json");
@@ -130,6 +140,7 @@ public static class MetricsReportExporter
         return sessions;
     }
 
+    // Escreve CSV e TSV comparativos, incluindo colunas dinâmicas descobertas nos dados.
     private static void WriteComparisonCsv(
         string metricsDirectory,
         List<SessionMetricsData> sessions)
@@ -167,6 +178,7 @@ public static class MetricsReportExporter
             new UTF8Encoding(true));
     }
 
+    // Constrói uma tabela delimitada com escaping adequado para CSV/TSV.
     private static string BuildDelimitedTable(
         List<string> columns,
         List<Dictionary<string, string>> rows,
@@ -187,6 +199,7 @@ public static class MetricsReportExporter
         return output.ToString();
     }
 
+    // Converte uma sessão inteira numa linha de comparação.
     private static Dictionary<string, string> BuildComparisonRow(SessionMetricsData session)
     {
         Dictionary<string, string> row =
@@ -216,6 +229,7 @@ public static class MetricsReportExporter
         return row;
     }
 
+    // Acrescenta métricas da exploração livre à linha comparativa.
     private static void AddPhase1Columns(
         Dictionary<string, string> row,
         Phase1MetricsData phase)
@@ -259,6 +273,7 @@ public static class MetricsReportExporter
         }
     }
 
+    // Acrescenta métricas das tarefas de navegação guiada.
     private static void AddPhase2Columns(
         Dictionary<string, string> row,
         Phase2MetricsData phase)
@@ -304,6 +319,7 @@ public static class MetricsReportExporter
         }
     }
 
+    // Acrescenta métricas da sala de jantar e do jogo da memória.
     private static void AddPhase3Columns(
         Dictionary<string, string> row,
         Phase3MetricsData phase)
@@ -376,6 +392,7 @@ public static class MetricsReportExporter
         }
     }
 
+    // Acrescenta métricas da recolha e entrega de alimentos.
     private static void AddPhase4Columns(
         Dictionary<string, string> row,
         Phase4MetricsData phase)
@@ -405,6 +422,7 @@ public static class MetricsReportExporter
         AddDeliverySequenceColumns(row, phase.deliveryAttempts);
     }
 
+    // Agrega os alimentos por tipo para criar colunas dinâmicas.
     private static void AddFoodTypeColumns(
         Dictionary<string, string> row,
         List<FoodAggregateMetric> foods)
@@ -446,6 +464,7 @@ public static class MetricsReportExporter
         }
     }
 
+    // Resume a ordem das tentativas de entrega e motivos de rejeição.
     private static void AddDeliverySequenceColumns(
         Dictionary<string, string> row,
         List<FoodDeliveryAttemptMetric> attempts)
@@ -481,6 +500,7 @@ public static class MetricsReportExporter
                         attempt.foodType + ": " + TranslateDeliveryReason(attempt.reason))));
     }
 
+    // Cria um relatório de texto individual para cada sessão.
     private static void WriteSessionReports(
         string metricsDirectory,
         List<SessionMetricsData> sessions)
@@ -501,6 +521,7 @@ public static class MetricsReportExporter
         }
     }
 
+    // Monta o relatório textual completo de uma sessão.
     private static string BuildSessionReport(SessionMetricsData session)
     {
         StringBuilder report = new StringBuilder();
@@ -526,6 +547,7 @@ public static class MetricsReportExporter
         return report.ToString();
     }
 
+    // Escreve a secção textual da fase de exploração livre.
     private static void AppendPhase1Report(StringBuilder report, Phase1MetricsData phase)
     {
         report.AppendLine();
@@ -582,6 +604,7 @@ public static class MetricsReportExporter
         }
     }
 
+    // Escreve a secção textual das tarefas guiadas.
     private static void AppendPhase2Report(StringBuilder report, Phase2MetricsData phase)
     {
         report.AppendLine();
@@ -626,6 +649,7 @@ public static class MetricsReportExporter
         }
     }
 
+    // Escreve a secção textual do jogo da memória.
     private static void AppendPhase3Report(StringBuilder report, Phase3MetricsData phase)
     {
         report.AppendLine();
@@ -681,6 +705,7 @@ public static class MetricsReportExporter
         }
     }
 
+    // Escreve a secção textual da recolha de alimentos.
     private static void AppendPhase4Report(StringBuilder report, Phase4MetricsData phase)
     {
         report.AppendLine();
@@ -738,6 +763,7 @@ public static class MetricsReportExporter
         }
     }
 
+    // Soma manipulações, entregas aceites e rejeitadas por tipo de alimento.
     private static Dictionary<string, FoodTypeTotals> GetFoodTypeTotals(
         List<FoodAggregateMetric> foods)
     {
@@ -771,6 +797,7 @@ public static class MetricsReportExporter
         return totals;
     }
 
+    // Adiciona colunas comuns de conclusão e duração de fase.
     private static void AddTimingColumns(
         Dictionary<string, string> row,
         string phaseName,
@@ -784,11 +811,13 @@ public static class MetricsReportExporter
             SetNumber(row, phaseName + " duração (s)", timing.durationSeconds);
     }
 
+    // Confirma se uma fase tem início registado.
     private static bool HasStarted(PhaseTimingMetric timing)
     {
         return timing != null && !string.IsNullOrWhiteSpace(timing.startedUtc);
     }
 
+    // Define valores textuais, evitando nulos no CSV final.
     private static void Set(
         Dictionary<string, string> row,
         string column,
@@ -797,6 +826,7 @@ public static class MetricsReportExporter
         row[column] = value ?? string.Empty;
     }
 
+    // Formata números reais segundo a cultura portuguesa.
     private static void SetNumber(
         Dictionary<string, string> row,
         string column,
@@ -805,6 +835,7 @@ public static class MetricsReportExporter
         row[column] = Number(value);
     }
 
+    // Formata números inteiros segundo a cultura portuguesa.
     private static void SetNumber(
         Dictionary<string, string> row,
         string column,
@@ -813,6 +844,7 @@ public static class MetricsReportExporter
         row[column] = value.ToString(PortugueseCulture);
     }
 
+    // Esconde valores negativos usados como "não registado".
     private static void SetOptionalNumber(
         Dictionary<string, string> row,
         string column,
@@ -821,16 +853,19 @@ public static class MetricsReportExporter
         row[column] = value < 0f ? string.Empty : Number(value);
     }
 
+    // Formatação curta de valores numéricos.
     private static string Number(float value)
     {
         return value.ToString("0.###", PortugueseCulture);
     }
 
+    // Converte rácios em percentagens legíveis.
     private static string Percentage(float ratio)
     {
         return (ratio * 100f).ToString("0.#", PortugueseCulture) + "%";
     }
 
+    // Converte segundos para um formato de duração compacto.
     private static string FormatDuration(float seconds)
     {
         if (seconds < 0f)
@@ -843,16 +878,19 @@ public static class MetricsReportExporter
         return duration.ToString(@"m\:ss", CultureInfo.InvariantCulture);
     }
 
+    // Apresenta durações opcionais com texto quando não existem dados.
     private static string FormatOptionalDuration(float seconds)
     {
         return seconds < 0f ? "não registado" : FormatDuration(seconds);
     }
 
+    // Normaliza booleanos para texto português.
     private static string YesNo(bool value)
     {
         return value ? "Sim" : "Não";
     }
 
+    // Junta sequências preservando a ordem registada.
     private static string Join(List<string> values, string separator)
     {
         if (values == null || values.Count == 0)
@@ -861,11 +899,13 @@ public static class MetricsReportExporter
         return string.Join(separator, values);
     }
 
+    // Usa travessão visual para campos vazios nos relatórios.
     private static string EmptyAsDash(string value)
     {
         return string.IsNullOrWhiteSpace(value) ? "—" : value;
     }
 
+    // Traduz motivos técnicos de fim para texto legível.
     private static string TranslateEndReason(string reason)
     {
         switch (reason)
@@ -879,6 +919,7 @@ public static class MetricsReportExporter
         }
     }
 
+    // Traduz o resultado técnico da entrega.
     private static string TranslateDeliveryResult(string result)
     {
         return string.Equals(result, "accepted", StringComparison.OrdinalIgnoreCase)
@@ -886,6 +927,7 @@ public static class MetricsReportExporter
             : "rejeitada";
     }
 
+    // Traduz motivos técnicos de rejeição de entrega.
     private static string TranslateDeliveryReason(string reason)
     {
         switch (reason)
@@ -903,6 +945,7 @@ public static class MetricsReportExporter
         }
     }
 
+    // Escreve uma linha completa respeitando o delimitador escolhido.
     private static void AppendDelimitedRow(
         StringBuilder output,
         IEnumerable<string> values,
@@ -921,6 +964,7 @@ public static class MetricsReportExporter
         output.AppendLine();
     }
 
+    // Escapa células quando contêm delimitadores, aspas ou quebras de linha.
     private static void AppendDelimitedCell(
         StringBuilder output,
         string value,
@@ -944,6 +988,7 @@ public static class MetricsReportExporter
         output.Append('"');
     }
 
+    // Remove caracteres inválidos antes de criar nomes de ficheiro.
     private static string SanitizeFileName(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -956,6 +1001,7 @@ public static class MetricsReportExporter
         return result;
     }
 
+    // Acumulador interno usado nos resumos por tipo de alimento.
     private sealed class FoodTypeTotals
     {
         public int grabs;

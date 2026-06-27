@@ -7,12 +7,19 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit.UI;
 
+/*
+ * Interface em world-space para introduzir o identificador anónimo do participante.
+ * Bloqueia temporariamente a locomoção, constrói um teclado numérico em runtime
+ * e devolve o ID confirmado ao sistema de métricas.
+ */
 public class ParticipantIdEntryUI : MonoBehaviour
 {
+    // Regras de identificação e nome do objeto de locomoção a suspender.
     private const string LocomotionObjectName = "Locomotion";
     private const int MinimumNumberDigits = 3;
     private const int MaximumInputDigits = 6;
 
+    // Estado da entrada atual e referências aos elementos criados em runtime.
     private readonly StringBuilder enteredDigits = new StringBuilder();
     private Action<string> confirmedCallback;
     private TMP_Text participantIdText;
@@ -23,6 +30,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
     private bool locomotionWasActive;
     private bool initialized;
 
+    // Cria a UI apenas uma vez e guarda o callback de confirmação.
     public static void Show(Action<string> onConfirmed)
     {
         ParticipantIdEntryUI existing =
@@ -46,11 +54,13 @@ public class ParticipantIdEntryUI : MonoBehaviour
         entryUI.confirmedCallback = onConfirmed;
     }
 
+    // Aguarda pela câmara principal antes de posicionar o painel no espaço XR.
     private void Start()
     {
         StartCoroutine(InitializeWhenCameraIsReady());
     }
 
+    // Prepara EventSystem, suspende locomoção e constrói a interface.
     private IEnumerator InitializeWhenCameraIsReady()
     {
         while (Camera.main == null)
@@ -65,6 +75,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
         BuildInterface(Camera.main);
     }
 
+    // Restaura recursos temporários quando a UI é destruída.
     private void OnDestroy()
     {
         RestoreLocomotion();
@@ -76,6 +87,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
             Destroy(roundedRectangleTexture);
     }
 
+    // Constrói o painel, textos, teclado e botão de confirmação em world-space.
     private void BuildInterface(Camera targetCamera)
     {
         Canvas canvas = GetComponent<Canvas>();
@@ -184,6 +196,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
             new Color(1f, 0.55f, 0.45f));
     }
 
+    // Acrescenta um dígito respeitando o limite máximo.
     private void AppendDigit(char digit)
     {
         if (!char.IsDigit(digit) || enteredDigits.Length >= MaximumInputDigits)
@@ -193,6 +206,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
         UpdateDisplay();
     }
 
+    // Remove o último dígito introduzido.
     private void RemoveLastDigit()
     {
         if (enteredDigits.Length == 0)
@@ -202,12 +216,14 @@ public class ParticipantIdEntryUI : MonoBehaviour
         UpdateDisplay();
     }
 
+    // Limpa toda a entrada numérica.
     private void ClearInput()
     {
         enteredDigits.Clear();
         UpdateDisplay();
     }
 
+    // Atualiza o texto visível e limpa mensagens de erro.
     private void UpdateDisplay()
     {
         if (participantIdText == null)
@@ -221,6 +237,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
             statusText.text = string.Empty;
     }
 
+    // Valida a entrada e devolve o identificador ao chamador.
     private void ConfirmParticipantId()
     {
         if (enteredDigits.Length == 0)
@@ -240,11 +257,13 @@ public class ParticipantIdEntryUI : MonoBehaviour
         Destroy(gameObject);
     }
 
+    // Cria o identificador final com prefixo P e zeros à esquerda.
     private string BuildParticipantId()
     {
         return "P" + enteredDigits.ToString().PadLeft(MinimumNumberDigits, '0');
     }
 
+    // Desativa temporariamente a locomoção para evitar movimento durante a escrita.
     private void DisableLocomotion()
     {
         Transform[] transforms =
@@ -262,6 +281,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
         }
     }
 
+    // Repõe a locomoção no estado em que estava antes da abertura da UI.
     private void RestoreLocomotion()
     {
         if (locomotionObject != null)
@@ -270,6 +290,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
         locomotionObject = null;
     }
 
+    // Garante que existe EventSystem compatível com UI em XR.
     private static void EnsureEventSystem()
     {
         EventSystem eventSystem =
@@ -294,6 +315,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
         DontDestroyOnLoad(eventSystemObject);
     }
 
+    // Cria um texto TextMeshPro configurado para o painel.
     private TMP_Text CreateText(
         string objectName,
         Transform parent,
@@ -331,6 +353,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
         return text;
     }
 
+    // Cria um botão com imagem arredondada e rótulo central.
     private Button CreateButton(
         string objectName,
         Transform parent,
@@ -383,6 +406,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
         return button;
     }
 
+    // Aplica o sprite arredondado reutilizável a uma imagem.
     private void ApplyRoundedCorners(Image image)
     {
         if (image == null)
@@ -393,6 +417,7 @@ public class ParticipantIdEntryUI : MonoBehaviour
         image.type = Image.Type.Sliced;
     }
 
+    // Gera uma textura pequena com cantos arredondados para os elementos da UI.
     private void EnsureRoundedRectangleSprite()
     {
         if (roundedRectangleSprite != null)

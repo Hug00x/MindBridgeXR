@@ -6,18 +6,27 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
+/*
+ * Serviço persistente de recolha de métricas do MindBridgeXR.
+ * Acompanha a sessão do participante, regista eventos por fase, calcula
+ * indicadores de desempenho e exporta os resultados para JSON, JSONL e CSV.
+ */
 public class MetricsManager : MonoBehaviour
 {
+    // Chaves usadas para detetar se a sessão anterior terminou corretamente.
     private const string LastSessionCompletedKey = "MindBridgeXR.Metrics.LastSessionCompleted";
     private const string LastSessionIdKey = "MindBridgeXR.Metrics.LastSessionId";
 
+    // Acesso global ao gestor persistente.
     public static MetricsManager Instance { get; private set; }
 
+    // Caminhos expostos para diagnóstico ou apresentação ao utilizador.
     public string SummaryFilePath => summaryFilePath;
     public string EventsFilePath => eventsFilePath;
     public string CombinedCsvFilePath => combinedCsvFilePath;
     public bool IsSessionActive => sessionActive;
 
+    // Estado base da sessão e ficheiros de exportação.
     private SessionMetricsData data;
     private bool sessionActive;
     private bool collectDistanceTravelled;
@@ -29,34 +38,41 @@ public class MetricsManager : MonoBehaviour
     private string eventsFilePath;
     private string combinedCsvFilePath;
 
+    // Estado temporário da tarefa guiada atualmente em curso.
     private GuidedTaskMetric activeGuidedTask;
     private double activeGuidedTaskStartedRealtime;
     private readonly HashSet<string> activeTaskVisitedRooms = new HashSet<string>();
 
+    // Estado do jogo da memória usado para calcular duração, tentativas e eficiência.
     private bool memoryGameRunning;
     private double memoryGameStartedRealtime;
     private float memoryAttemptDurationTotal;
 
+    // Estado da fase exterior e tempos entre agarrar e entregar alimentos.
     private bool listPickedUp;
     private double listPickedUpRealtime;
     private float acceptedFoodDeliveryTimeTotal;
     private readonly Dictionary<int, double> lastFoodGrabRealtime = new Dictionary<int, double>();
 
+    // Estado de navegação usado nas fases de exploração e tarefas guiadas.
     private string currentPhase1RoomId;
     private double currentPhase1RoomEnteredRealtime;
     private string lastRoomEntryId;
     private double lastRoomEntryRealtime = -10d;
 
+    // Amostragem opcional da distância percorrida pelo jogador.
     private Transform trackedPlayer;
     private Vector3 lastPlayerPosition;
     private bool hasLastPlayerPosition;
     private float nextMovementSampleTime;
 
+    // Estado de interrupções da aplicação, como pausa ou perda de foco.
     private bool interruptionActive;
     private string activeInterruptionReason;
     private double interruptionStartedRealtime;
     private InterruptionMetric activeInterruption;
 
+    // Garante que existe um MetricsManager na cena, criando-o quando necessário.
     public static MetricsManager GetOrCreate()
     {
         if (Instance != null)
@@ -70,6 +86,7 @@ public class MetricsManager : MonoBehaviour
         return metricsObject.AddComponent<MetricsManager>();
     }
 
+    // Configura o singleton persistente entre cenas.
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -82,6 +99,7 @@ public class MetricsManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
     }
 
+    // Amostra periodicamente a distância percorrida durante a exploração livre.
     private void Update()
     {
         if (!sessionActive || !collectDistanceTravelled || activePhase != "Phase1_Exploration")
@@ -94,6 +112,7 @@ public class MetricsManager : MonoBehaviour
         SamplePlayerDistance();
     }
 
+    // Regista interrupções quando a aplicação é colocada em pausa.
     private void OnApplicationPause(bool paused)
     {
         if (paused)
@@ -102,6 +121,7 @@ public class MetricsManager : MonoBehaviour
             EndInterruption();
     }
 
+    // Regista interrupções quando a aplicação perde ou recupera foco.
     private void OnApplicationFocus(bool hasFocus)
     {
         if (!hasFocus)
@@ -110,12 +130,14 @@ public class MetricsManager : MonoBehaviour
             EndInterruption();
     }
 
+    // Fecha a sessão como interrompida se a aplicação terminar antes do fim.
     private void OnApplicationQuit()
     {
         if (sessionActive)
             EndSession(false, "application_quit");
     }
 
+    // Remove a subscrição de mudança de cena quando o singleton é destruído.
     private void OnDestroy()
     {
         if (Instance != this)
@@ -125,6 +147,7 @@ public class MetricsManager : MonoBehaviour
         Instance = null;
     }
 
+    // Inicia uma nova sessão anónima e prepara os ficheiros de métricas.
     public void BeginSession(
         string anonymousParticipantId,
         bool enableDistanceTravelled,
@@ -191,6 +214,7 @@ public class MetricsManager : MonoBehaviour
         RebuildCombinedCsv();
     }
 
+    // Começa a fase de exploração livre.
     public void BeginPhase1()
     {
         if (!sessionActive || !string.IsNullOrEmpty(data.phase1.timing.startedUtc))
@@ -199,6 +223,7 @@ public class MetricsManager : MonoBehaviour
         BeginPhase(data.phase1.timing, "Phase1_Exploration");
     }
 
+    // Fecha a exploração livre e consolida visitas às divisões.
     public void CompletePhase1()
     {
         if (!sessionActive || data.phase1.timing.completed)
@@ -209,6 +234,7 @@ public class MetricsManager : MonoBehaviour
         CompletePhase(data.phase1.timing, "Phase1_Exploration");
     }
 
+    // Começa a fase de navegação guiada.
     public void BeginPhase2()
     {
         if (!sessionActive || !string.IsNullOrEmpty(data.phase2.timing.startedUtc))
@@ -217,6 +243,7 @@ public class MetricsManager : MonoBehaviour
         BeginPhase(data.phase2.timing, "Phase2_GuidedNavigation");
     }
 
+    // Regista o início de uma tarefa guiada específica.
     public void BeginGuidedTask(int taskIndex, string targetRoomId)
     {
         if (!sessionActive || activePhase != "Phase2_GuidedNavigation")
@@ -239,6 +266,7 @@ public class MetricsManager : MonoBehaviour
             Field("targetRoomId", targetRoomId));
     }
 
+    // Fecha a tarefa guiada ativa e atualiza médias da fase 2.
     public void CompleteGuidedTask(int taskIndex)
     {
         if (!sessionActive || activeGuidedTask == null || activeGuidedTask.completed)
@@ -262,6 +290,7 @@ public class MetricsManager : MonoBehaviour
         RefreshPhase2Totals();
     }
 
+    // Finaliza a fase de navegação guiada.
     public void CompletePhase2()
     {
         if (!sessionActive || data.phase2.timing.completed)
@@ -271,6 +300,7 @@ public class MetricsManager : MonoBehaviour
         CompletePhase(data.phase2.timing, "Phase2_GuidedNavigation");
     }
 
+    // Começa a fase da sala de jantar e jogo da memória.
     public void BeginPhase3()
     {
         if (!sessionActive || !string.IsNullOrEmpty(data.phase3.timing.startedUtc))
@@ -280,6 +310,7 @@ public class MetricsManager : MonoBehaviour
         BeginPhase(data.phase3.timing, "Phase3_DiningMemory");
     }
 
+    // Marca o tempo até o jogador chegar à sala de jantar.
     public void RecordDiningRoomReached()
     {
         if (!sessionActive || activePhase != "Phase3_DiningMemory" || data.phase3.timeToDiningRoomSeconds >= 0f)
@@ -289,6 +320,7 @@ public class MetricsManager : MonoBehaviour
         LogEvent("dining_room_reached", Field("phaseElapsedSeconds", data.phase3.timeToDiningRoomSeconds));
     }
 
+    // Marca o tempo até o jogador alcançar a mesa da atividade.
     public void RecordDiningTableReached()
     {
         if (!sessionActive || activePhase != "Phase3_DiningMemory" || data.phase3.timeToTableSeconds >= 0f)
@@ -298,6 +330,7 @@ public class MetricsManager : MonoBehaviour
         LogEvent("dining_table_reached", Field("phaseElapsedSeconds", data.phase3.timeToTableSeconds));
     }
 
+    // Inicia a medição do jogo da memória.
     public void BeginMemoryGame(int theoreticalMinimumAttempts)
     {
         if (!sessionActive || activePhase != "Phase3_DiningMemory" || memoryGameRunning)
@@ -317,6 +350,7 @@ public class MetricsManager : MonoBehaviour
             Field("sceneChangesUntilGame", data.phase3.sceneChangesUntilGame));
     }
 
+    // Conta seleções por carta para perceber padrões de tentativa.
     public void RecordMemoryCardSelected(string cardId)
     {
         if (!sessionActive || !memoryGameRunning)
@@ -331,6 +365,7 @@ public class MetricsManager : MonoBehaviour
             Field("selectionCount", cardMetric.selectionCount));
     }
 
+    // Regista uma tentativa do jogo da memória e atualiza precisão/eficiência.
     public void RecordMemoryAttempt(bool correct, float durationSeconds, string matchedPairId)
     {
         if (!sessionActive || !memoryGameRunning)
@@ -374,6 +409,7 @@ public class MetricsManager : MonoBehaviour
             Field("gameElapsedSeconds", gameElapsed));
     }
 
+    // Fecha a medição do jogo da memória.
     public void CompleteMemoryGame()
     {
         if (!sessionActive || !memoryGameRunning)
@@ -393,6 +429,7 @@ public class MetricsManager : MonoBehaviour
             Field("efficiency", data.phase3.efficiency));
     }
 
+    // Finaliza a fase da sala de jantar.
     public void CompletePhase3()
     {
         if (!sessionActive || data.phase3.timing.completed)
@@ -402,6 +439,7 @@ public class MetricsManager : MonoBehaviour
         CompletePhase(data.phase3.timing, "Phase3_DiningMemory");
     }
 
+    // Começa a fase exterior de recolha de alimentos.
     public void BeginPhase4()
     {
         if (!sessionActive || !string.IsNullOrEmpty(data.phase4.timing.startedUtc))
@@ -413,6 +451,7 @@ public class MetricsManager : MonoBehaviour
         BeginPhase(data.phase4.timing, "Phase4_OutdoorFood");
     }
 
+    // Marca o momento em que o participante recolhe a lista de alimentos.
     public void RecordFoodListPickedUp()
     {
         if (!sessionActive || activePhase != "Phase4_OutdoorFood" || listPickedUp)
@@ -431,6 +470,7 @@ public class MetricsManager : MonoBehaviour
             Field("deliveryAttemptsBeforeList", data.phase4.deliveryAttemptsBeforeListPickup));
     }
 
+    // Regista que um alimento foi agarrado.
     public void RecordFoodGrab(FoodCollectible food)
     {
         if (!sessionActive || activePhase != "Phase4_OutdoorFood" || food == null)
@@ -453,6 +493,7 @@ public class MetricsManager : MonoBehaviour
             Field("grabCount", foodMetric.grabCount));
     }
 
+    // Regista que um alimento foi largado e se terminou entregue.
     public void RecordFoodReleased(FoodCollectible food, bool delivered)
     {
         if (!sessionActive || activePhase != "Phase4_OutdoorFood" || food == null)
@@ -475,6 +516,7 @@ public class MetricsManager : MonoBehaviour
         RefreshPhase4Totals();
     }
 
+    // Regista uma tentativa de entrega aceite ou rejeitada.
     public void RecordFoodDeliveryAttempt(FoodCollectible food, string result, string reason)
     {
         if (!sessionActive || activePhase != "Phase4_OutdoorFood" || food == null)
@@ -536,6 +578,7 @@ public class MetricsManager : MonoBehaviour
             Field("secondsSinceLastGrab", secondsSinceGrab));
     }
 
+    // Finaliza a fase exterior e calcula duração de recolha/entrega.
     public void CompletePhase4()
     {
         if (!sessionActive || data.phase4.timing.completed)
@@ -548,6 +591,7 @@ public class MetricsManager : MonoBehaviour
         CompletePhase(data.phase4.timing, "Phase4_OutdoorFood");
     }
 
+    // Encerra a experiência completa como concluída.
     public void CompleteExperience()
     {
         if (!sessionActive)
@@ -556,6 +600,7 @@ public class MetricsManager : MonoBehaviour
         EndSession(true, "experience_completed");
     }
 
+    // Regista entrada numa divisão e encaminha para a fase ativa.
     public void RecordRoomEntered(string roomId)
     {
         if (!sessionActive || string.IsNullOrWhiteSpace(roomId))
@@ -579,6 +624,7 @@ public class MetricsManager : MonoBehaviour
         LogEvent("room_entered", Field("roomId", roomId));
     }
 
+    // Atualiza sequência, revisitas e tempo de descoberta na exploração livre.
     private void RecordPhase1RoomEntered(string roomId, double now)
     {
         CloseCurrentPhase1RoomTime();
@@ -616,6 +662,7 @@ public class MetricsManager : MonoBehaviour
         RefreshPhase1Totals();
     }
 
+    // Atualiza percurso e regressões dentro da tarefa guiada ativa.
     private void RecordPhase2RoomEntered(string roomId)
     {
         if (activeGuidedTask == null)
@@ -628,6 +675,7 @@ public class MetricsManager : MonoBehaviour
         RefreshPhase2Totals();
     }
 
+    // Preenche dados comuns ao início de qualquer fase.
     private void BeginPhase(PhaseTimingMetric timing, string phaseName)
     {
         activePhase = phaseName;
@@ -640,6 +688,7 @@ public class MetricsManager : MonoBehaviour
         LogEvent("phase_started", Field("phaseName", phaseName));
     }
 
+    // Preenche dados comuns ao fim de qualquer fase e exporta resultados.
     private void CompletePhase(PhaseTimingMetric timing, string phaseName)
     {
         timing.endedUtc = UtcNow();
@@ -660,6 +709,7 @@ public class MetricsManager : MonoBehaviour
         RebuildCombinedCsv();
     }
 
+    // Fecha a sessão, grava o motivo de fim e atualiza os ficheiros finais.
     private void EndSession(bool completed, string reason)
     {
         EndInterruption();
@@ -684,6 +734,7 @@ public class MetricsManager : MonoBehaviour
         RebuildCombinedCsv();
     }
 
+    // Abre um intervalo de interrupção quando a experiência é suspensa.
     private void BeginInterruption(string reason)
     {
         if (!sessionActive || interruptionActive)
@@ -704,6 +755,7 @@ public class MetricsManager : MonoBehaviour
         LogEvent("interruption_started", Field("reason", reason));
     }
 
+    // Fecha a interrupção ativa e acumula a sua duração.
     private void EndInterruption()
     {
         if (!sessionActive || !interruptionActive)
@@ -723,6 +775,7 @@ public class MetricsManager : MonoBehaviour
         activeInterruption = null;
     }
 
+    // Conta mudanças de cena e atribui-as à fase que estava ativa.
     private void OnActiveSceneChanged(Scene previousScene, Scene nextScene)
     {
         if (!sessionActive)
@@ -762,18 +815,22 @@ public class MetricsManager : MonoBehaviour
             Field("toScene", nextScene.name));
     }
 
+    // Contador dedicado às mudanças de cena antes do jogo da memória.
     private int phase3SceneChanges;
 
+    // Incrementa o contador específico da fase 3.
     private void IncrementPhase3SceneChanges()
     {
         phase3SceneChanges++;
     }
 
+    // Devolve quantas mudanças ocorreram antes do início do jogo.
     private int CountSceneChangesForPhase3()
     {
         return phase3SceneChanges;
     }
 
+    // Soma deslocações entre amostras sucessivas do objeto Player.
     private void SamplePlayerDistance()
     {
         if (trackedPlayer == null)
@@ -794,6 +851,7 @@ public class MetricsManager : MonoBehaviour
         hasLastPlayerPosition = true;
     }
 
+    // Reinicia a amostragem de movimento ao mudar de fase ou cena.
     private void ResetMovementTracking()
     {
         trackedPlayer = null;
@@ -801,6 +859,7 @@ public class MetricsManager : MonoBehaviour
         nextMovementSampleTime = Time.unscaledTime;
     }
 
+    // Fecha o tempo passado na divisão atualmente ativa na fase 1.
     private void CloseCurrentPhase1RoomTime()
     {
         if (string.IsNullOrWhiteSpace(currentPhase1RoomId))
@@ -811,6 +870,7 @@ public class MetricsManager : MonoBehaviour
         currentPhase1RoomId = null;
     }
 
+    // Obtém ou cria o acumulador de métricas de uma divisão.
     private RoomAggregateMetric FindRoomMetric(string roomId)
     {
         foreach (RoomAggregateMetric room in data.phase1.rooms)
@@ -824,6 +884,7 @@ public class MetricsManager : MonoBehaviour
         return created;
     }
 
+    // Obtém ou cria o contador de seleções de uma carta.
     private CardSelectionMetric FindCardSelection(string cardId)
     {
         foreach (CardSelectionMetric card in data.phase3.cardSelections)
@@ -837,6 +898,7 @@ public class MetricsManager : MonoBehaviour
         return created;
     }
 
+    // Obtém ou cria o acumulador de métricas de um alimento.
     private FoodAggregateMetric FindFoodMetric(FoodCollectible food)
     {
         string foodId = food.MetricsId;
@@ -856,6 +918,7 @@ public class MetricsManager : MonoBehaviour
         return created;
     }
 
+    // Recalcula totais derivados da exploração livre.
     private void RefreshPhase1Totals()
     {
         data.phase1.uniqueRoomsVisited = 0;
@@ -870,6 +933,7 @@ public class MetricsManager : MonoBehaviour
         }
     }
 
+    // Recalcula médias, tarefa mais rápida/lenta e regressões da fase 2.
     private void RefreshPhase2Totals()
     {
         float totalTime = 0f;
@@ -907,6 +971,7 @@ public class MetricsManager : MonoBehaviour
         data.phase2.totalRevisitsOrRegressions = revisits;
     }
 
+    // Recalcula precisão, tempo médio e eficiência do jogo da memória.
     private void RefreshPhase3Totals()
     {
         data.phase3.accuracy = data.phase3.totalAttempts > 0
@@ -922,6 +987,7 @@ public class MetricsManager : MonoBehaviour
             : 0f;
     }
 
+    // Recalcula precisão de entregas e manipulações desnecessárias.
     private void RefreshPhase4Totals()
     {
         data.phase4.deliveryAccuracy = data.phase4.totalDeliveryAttempts > 0
@@ -937,6 +1003,7 @@ public class MetricsManager : MonoBehaviour
             data.phase4.totalFoodGrabs - data.phase4.acceptedDeliveries);
     }
 
+    // Acrescenta um evento cronológico ao ficheiro JSONL e atualiza o resumo.
     private void LogEvent(string eventType, params MetricEventField[] fields)
     {
         if (!sessionActive || data == null)
@@ -960,11 +1027,13 @@ public class MetricsManager : MonoBehaviour
         }
         catch (Exception)
         {
+            // A falha de escrita de eventos não deve interromper a experiência em VR.
         }
 
         SaveSummary();
     }
 
+    // Grava o resumo JSON mais recente da sessão.
     private void SaveSummary()
     {
         if (data == null || string.IsNullOrWhiteSpace(summaryFilePath))
@@ -979,9 +1048,11 @@ public class MetricsManager : MonoBehaviour
         }
         catch (Exception)
         {
+            // A falha de escrita do resumo não deve interromper a sessão.
         }
     }
 
+    // Reconstrói o CSV combinado a partir de todos os resumos disponíveis.
     public void RebuildCombinedCsv()
     {
         if (string.IsNullOrWhiteSpace(summaryFilePath))
@@ -1021,9 +1092,11 @@ public class MetricsManager : MonoBehaviour
         }
         catch (Exception)
         {
+            // A exportação agregada é complementar e não deve bloquear o fluxo principal.
         }
     }
 
+    // Escreve o cabeçalho padrão do CSV combinado.
     private static void AppendCsvHeader(StringBuilder csv)
     {
         csv.AppendLine(
@@ -1033,6 +1106,7 @@ public class MetricsManager : MonoBehaviour
             "text_value;unit");
     }
 
+    // Adiciona ao CSV todos os grupos de métricas de uma sessão.
     private static void AppendSessionToCsv(StringBuilder csv, SessionMetricsData session)
     {
         AddNumericCsvMetric(csv, session, "session", string.Empty, "session", session.sessionId, 0,
@@ -1070,6 +1144,7 @@ public class MetricsManager : MonoBehaviour
         AppendPhase4(csv, session);
     }
 
+    // Exporta interrupções registadas durante a sessão.
     private static void AppendInterruptions(StringBuilder csv, SessionMetricsData session)
     {
         if (session.interruptions == null)
@@ -1090,6 +1165,7 @@ public class MetricsManager : MonoBehaviour
         }
     }
 
+    // Exporta tempos comuns de início, fim, duração e conclusão de fase.
     private static void AppendPhaseTiming(
         StringBuilder csv,
         SessionMetricsData session,
@@ -1109,6 +1185,7 @@ public class MetricsManager : MonoBehaviour
             timing.endedUtc, string.Empty, "completed", BoolText(timing.completed));
     }
 
+    // Exporta métricas específicas da fase de exploração livre.
     private static void AppendPhase1(StringBuilder csv, SessionMetricsData session)
     {
         Phase1MetricsData phase = session.phase1;
@@ -1163,6 +1240,7 @@ public class MetricsManager : MonoBehaviour
         }
     }
 
+    // Exporta métricas específicas das tarefas guiadas.
     private static void AppendPhase2(StringBuilder csv, SessionMetricsData session)
     {
         Phase2MetricsData phase = session.phase2;
@@ -1213,6 +1291,7 @@ public class MetricsManager : MonoBehaviour
         }
     }
 
+    // Exporta métricas específicas do jogo da memória.
     private static void AppendPhase3(StringBuilder csv, SessionMetricsData session)
     {
         Phase3MetricsData phase = session.phase3;
@@ -1293,6 +1372,7 @@ public class MetricsManager : MonoBehaviour
         }
     }
 
+    // Exporta métricas específicas da recolha de alimentos.
     private static void AppendPhase4(StringBuilder csv, SessionMetricsData session)
     {
         Phase4MetricsData phase = session.phase4;
@@ -1391,6 +1471,7 @@ public class MetricsManager : MonoBehaviour
         }
     }
 
+    // Anexa eventos brutos JSONL para permitir auditoria detalhada da sessão.
     private static void AppendRawEventsToCsv(
         StringBuilder csv,
         SessionMetricsData session,
@@ -1446,6 +1527,7 @@ public class MetricsManager : MonoBehaviour
         }
     }
 
+    // Acrescenta uma linha de métrica numérica ao CSV.
     private static void AddNumericCsvMetric(
         StringBuilder csv,
         SessionMetricsData session,
@@ -1476,6 +1558,7 @@ public class MetricsManager : MonoBehaviour
             unit);
     }
 
+    // Acrescenta uma linha de métrica textual ao CSV.
     private static void AddTextCsvMetric(
         StringBuilder csv,
         SessionMetricsData session,
@@ -1505,6 +1588,7 @@ public class MetricsManager : MonoBehaviour
             string.Empty);
     }
 
+    // Escreve uma linha normalizada de métrica no CSV combinado.
     private static void AddCsvRow(
         StringBuilder csv,
         SessionMetricsData session,
@@ -1539,6 +1623,7 @@ public class MetricsManager : MonoBehaviour
         AppendCsvCell(csv, unit, true);
     }
 
+    // Escapa uma célula CSV quando contém separadores ou quebras de linha.
     private static void AppendCsvCell(StringBuilder csv, string value, bool endOfRow = false)
     {
         string safeValue = value ?? string.Empty;
@@ -1565,11 +1650,13 @@ public class MetricsManager : MonoBehaviour
             csv.Append(';');
     }
 
+    // Converte booleanos para texto estável em ficheiros de dados.
     private static string BoolText(bool value)
     {
         return value ? "true" : "false";
     }
 
+    // Junta listas de texto evitando nulos ou sequências vazias.
     private static string JoinStrings(List<string> values, string separator)
     {
         if (values == null || values.Count == 0)
@@ -1578,16 +1665,19 @@ public class MetricsManager : MonoBehaviour
         return string.Join(separator, values);
     }
 
+    // Calcula o tempo desde o início da fase ativa.
     private float ActivePhaseElapsed()
     {
         return ElapsedSince(activePhaseStartedRealtime);
     }
 
+    // Calcula segundos decorridos a partir do relógio realtime do Unity.
     private static float ElapsedSince(double startedRealtime)
     {
         return Mathf.Max(0f, (float)(Time.realtimeSinceStartupAsDouble - startedRealtime));
     }
 
+    // Normaliza valores de evento para texto independente da cultura do sistema.
     private static MetricEventField Field(string key, object value)
     {
         string text;
@@ -1616,11 +1706,13 @@ public class MetricsManager : MonoBehaviour
         return new MetricEventField(key, text);
     }
 
+    // Gera timestamps UTC em formato ISO 8601.
     private static string UtcNow()
     {
         return DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
     }
 
+    // Remove caracteres problemáticos antes de usar o ID em nomes de ficheiro.
     private static string SanitizeIdentifier(string value)
     {
         if (string.IsNullOrWhiteSpace(value))

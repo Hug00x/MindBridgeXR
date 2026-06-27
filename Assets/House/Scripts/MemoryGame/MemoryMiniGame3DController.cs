@@ -3,17 +3,26 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+/*
+ * Controla a ronda do jogo de memória 3D.
+ * Prepara o tabuleiro, mostra uma pré-visualização, recebe seleções de cartas,
+ * avalia pares, regista métricas e emite conclusão quando todos os pares necessários
+ * foram encontrados.
+ */
 public class MemoryMiniGame3DController : MonoBehaviour
 {
+    // Configuração do tabuleiro e visibilidade fora da ronda.
     [Header("Board")]
     [SerializeField] private GameObject boardRoot;
     [SerializeField] private bool hideBoardWhenNotRunning = true;
 
+    // Lista de cartas e tempos usados durante tentativas.
     [Header("Cartas")]
     [SerializeField] private List<MemoryCard3D> cards = new List<MemoryCard3D>();
     [SerializeField] private float mismatchHideDelay = 1f;
     [SerializeField] private float previewDuration = 2f;
 
+    // Feedback sonoro para pares corretos e incorretos.
     [Header("Audio")]
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private AudioClip correctPairClip;
@@ -32,6 +41,7 @@ public class MemoryMiniGame3DController : MonoBehaviour
 
     public event Action RoundCompleted;
 
+    // Resolve áudio, subscreve as cartas e deixa o tabuleiro pronto para uso.
     private void Awake()
     {
         if (audioSource == null)
@@ -46,6 +56,7 @@ public class MemoryMiniGame3DController : MonoBehaviour
         SetBoardVisible(true);
     }
 
+    // Remove listeners das cartas quando o controlador é destruído.
     private void OnDestroy()
     {
         foreach (MemoryCard3D card in cards)
@@ -55,6 +66,7 @@ public class MemoryMiniGame3DController : MonoBehaviour
         }
     }
 
+    // Reinicia a ronda, revela cartas para pré-visualização e bloqueia input.
     public void BeginGame()
     {
         if (cards == null || cards.Count < 2)
@@ -89,6 +101,7 @@ public class MemoryMiniGame3DController : MonoBehaviour
         roundRoutine = StartCoroutine(BeginRoundRoutine());
     }
 
+    // Mantém as cartas visíveis durante a pré-visualização antes de iniciar métricas.
     private IEnumerator BeginRoundRoutine()
     {
         foreach (MemoryCard3D card in cards)
@@ -112,8 +125,7 @@ public class MemoryMiniGame3DController : MonoBehaviour
         roundRoutine = null;
     }
 
-    
-
+    // Recebe uma carta selecionada e forma pares de duas seleções.
     private void OnCardSelected(MemoryCard3D card)
     {
         if (!IsRunning || inputLocked || card == null)
@@ -136,6 +148,7 @@ public class MemoryMiniGame3DController : MonoBehaviour
         }
     }
 
+    // Compara as duas cartas, aplica feedback, atualiza métricas e testa conclusão.
     private IEnumerator EvaluatePairRoutine()
     {
         inputLocked = true;
@@ -182,9 +195,9 @@ public class MemoryMiniGame3DController : MonoBehaviour
         }
     }
 
+    // Verifica se todos os pares relevantes para conclusão já foram resolvidos.
     private bool AreAllCardsMatched()
     {
-        // Count unmatched cards relevant for completion and keep the last unmatched reference.
         int unmatchedRelevantCount = 0;
         int unmatchedNonExcludedCount = 0;
         MemoryCard3D lastUnmatched = null;
@@ -210,18 +223,17 @@ public class MemoryMiniGame3DController : MonoBehaviour
             }
         }
 
-        // If there are no unmatched cards among the required pairs, the round is complete.
         if (unmatchedRelevantCount == 0)
             return true;
 
-        // Special rule: if exactly one non-excluded card remains unmatched and it's the special "X" card,
-        // consider the round complete (player should see only the Try Again card left).
+        // Regra especial: uma carta "X" isolada não impede terminar a ronda.
         if (unmatchedNonExcludedCount == 1 && lastUnmatched != null && string.Equals(lastUnmatched.PairID, "X", StringComparison.Ordinal))
             return true;
 
         return false;
     }
 
+    // Reconstrói o conjunto de pairID que têm pelo menos duas cartas válidas.
     private void RebuildRequiredPairs()
     {
         requiredPairIDs.Clear();
@@ -248,6 +260,7 @@ public class MemoryMiniGame3DController : MonoBehaviour
         }
     }
 
+    // Indica se uma carta conta para a condição principal de conclusão.
     private bool IsRequiredForCompletion(MemoryCard3D card)
     {
         if (card.ExcludeFromCompletion)
@@ -259,14 +272,14 @@ public class MemoryMiniGame3DController : MonoBehaviour
         return requiredPairIDs.Contains(card.PairID);
     }
 
-    
-
+    // Ativa ou desativa o tabuleiro inteiro.
     private void SetBoardVisible(bool visible)
     {
         GameObject target = boardRoot != null ? boardRoot : gameObject;
         target.SetActive(visible);
     }
 
+    // Controla o interactable XR de cada carta durante preparação e jogo.
     private void SetCardInteractionEnabled(MemoryCard3D card, bool enabled)
     {
         if (card == null)
@@ -279,6 +292,7 @@ public class MemoryMiniGame3DController : MonoBehaviour
             interactable.enabled = enabled;
     }
 
+    // Reproduz feedback sem exigir que todos os clips estejam atribuídos.
     private void PlayOneShot(AudioClip clip)
     {
         if (audioSource != null && clip != null)

@@ -71,8 +71,6 @@ As cenas ativas em `ProjectSettings/EditorBuildSettings.asset` são:
 | `Assets/Scenes/Floor2_Scene.unity` | Segundo piso da casa, usado nas fases de exploração e navegação guiada. |
 | `Assets/Scenes/Exterior_Scene.unity` | Exterior/pátio, tarefa de recolha e entrega de alimentos. |
 
-A cena `SampleScene.unity` está desativada no build.
-
 ## Fluxo da Experiência
 
 ### Fase 1: Exploração Tutorial
@@ -334,30 +332,6 @@ Este projeto recolhe dados comportamentais associados a códigos pseudonimizados
 - Definição clara do período de conservação dos dados.
 - Procedimentos para acesso, correção e eliminação dos dados.
 
-## Notas para Desenvolvimento
-
-- A cena inicial esperada é `Floor1_Scene`.
-- O `TaskManager`, `SceneTransitionManager`, `MetricsManager` e rig XR usam padrões de persistência entre cenas.
-- Evitar duplicar objetos persistentes nas cenas.
-- Ao adicionar uma nova divisão, atualizar:
-  - `TaskManager.allRooms`
-  - `SceneRoomRegistry.roomsInScene`
-  - `RoomZone.roomID`
-  - possíveis destinos em `GuidedTaskRoomOrder`
-- Ao adicionar nova comida, atualizar:
-  - `FoodType`
-  - requisitos em `OutdoorFoodPhaseController`
-  - prefabs/slots em `plateDisplays`
-  - identificadores usados nas métricas
-- Ao alterar cartas do jogo de memória, confirmar:
-  - pares com `pairID`
-  - IDs de métricas
-  - lista `cards` no `MemoryMiniGame3DController`
-  - regras de exclusão em `ExcludeFromCompletion`, se aplicável
-
-## Licença
-
-Definir a licença antes de publicar ou redistribuir o projeto. O código próprio e os assets de terceiros podem ter requisitos legais diferentes.
 
 ## Autor
 

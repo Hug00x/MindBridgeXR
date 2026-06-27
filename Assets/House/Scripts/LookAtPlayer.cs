@@ -1,18 +1,24 @@
 using UnityEngine;
 
+/*
+ * Mantém um painel ou texto virado horizontalmente para a câmara do jogador.
+ * É usado em elementos informativos no mundo para melhorar legibilidade em VR
+ * sem inclinar o objeto no eixo vertical.
+ */
 public class LookAtPlayer : MonoBehaviour
 {
     public Transform playerCamera;
 
+    // Tenta recuperar a câmara quando o objeto volta a ficar ativo.
     void OnEnable()
     {
-        // Reatribui a câmera quando o script é ativado
         if (playerCamera == null)
         {
             FindPlayerCamera();
         }
     }
 
+    // Atualiza a rotação no fim do frame para acompanhar a pose mais recente.
     void LateUpdate()
     {
         if (playerCamera == null)
@@ -30,9 +36,9 @@ public class LookAtPlayer : MonoBehaviour
         }
     }
 
+    // Usa a câmara principal como referência padrão do jogador.
     void FindPlayerCamera()
     {
-        // Procura pela câmera com a tag "MainCamera"
         Camera mainCamera = Camera.main;
         if (mainCamera != null)
         {

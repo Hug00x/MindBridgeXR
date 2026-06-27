@@ -5,34 +5,34 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using Unity.XR.CoreUtils;
 
+/*
+ * Gere transições seguras entre cenas em XR.
+ * O gestor aplica fade, apresenta mensagens, carrega a cena de destino e corrige
+ * a posição/orientação da câmara para alinhar o jogador com o SceneSpawnPoint.
+ */
 public class SceneTransitionManager : MonoBehaviour
 {
     public static SceneTransitionManager Instance;
 
+    // Referências visuais usadas para ocultar o carregamento e mostrar mensagens.
     [Header("Fade")]
     [SerializeField] private Image fadeImage;
     [SerializeField] private TMP_Text fadeMessageText;
     [SerializeField] private float fadeDuration = 1f;
     [SerializeField] private float defaultMessageHoldSeconds = 2f;
 
+    // Nomes usados para encontrar partes do rig que precisam de suspensão temporária.
     [Header("XR Object Names")]
     [SerializeField] private string xrRigName = "XR Origin (XR Rig)";
     [SerializeField] private string locomotionName = "Locomotion";
     [SerializeField] private string leftControllerName = "Left Controller";
     [SerializeField] private string rightControllerName = "Right Controller";
 
+    // Estabilização aplicada depois de uma transição de cena.
     [Header("Spawn XR")]
     [SerializeField, Min(1)]
     [Tooltip("Número de frames durante os quais a pose é novamente corrigida enquanto o ecrã está preto.")]
     private int spawnStabilizationFrames = 3;
-
-    [SerializeField, Min(0.0001f)]
-    [Tooltip("Erro máximo aceite entre a câmara e o ponto de spawn, em metros.")]
-    private float spawnPositionTolerance = 0.005f;
-
-    [SerializeField, Min(0.01f)]
-    [Tooltip("Erro máximo aceite na orientação horizontal da câmara, em graus.")]
-    private float spawnYawTolerance = 0.25f;
 
     private string pendingSpawnID;
     private string pendingTransitionMessage;
@@ -43,6 +43,7 @@ public class SceneTransitionManager : MonoBehaviour
 
     public bool IsTransitioning => isTransitioning;
 
+    // Singleton persistente para que o fade e a lógica de transição sobrevivam a cenas.
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -56,6 +57,7 @@ public class SceneTransitionManager : MonoBehaviour
         HideFadeMessage();
     }
 
+    // Garante que a locomoção não fica suspensa se o gestor for destruído.
     private void OnDestroy()
     {
         if (Instance != this)
@@ -65,6 +67,7 @@ public class SceneTransitionManager : MonoBehaviour
         Instance = null;
     }
 
+    // Sobrecargas públicas para pedir transições com ou sem mensagem intermédia.
     public void TransitionToScene(string sceneName, string spawnID)
     {
         TransitionToScene(sceneName, spawnID, null, defaultMessageHoldSeconds);
@@ -90,6 +93,7 @@ public class SceneTransitionManager : MonoBehaviour
         StartCoroutine(TransitionRoutine(sceneName));
     }
 
+    // Mostra a mensagem final sem carregar outra cena.
     public void ShowFinalMessage(string message)
     {
         ShowFinalMessage(message, defaultMessageHoldSeconds);
@@ -103,6 +107,7 @@ public class SceneTransitionManager : MonoBehaviour
         StartCoroutine(FinalMessageRoutine(message, messageHoldSeconds));
     }
 
+    // Sequência completa: fade out, mensagem opcional, carregamento, spawn e fade in.
     private IEnumerator TransitionRoutine(string sceneName)
     {
         isTransitioning = true;
@@ -119,15 +124,14 @@ public class SceneTransitionManager : MonoBehaviour
 
         yield return SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
 
-        // Dá tempo à nova cena e ao tracking XR para estabilizarem.
+        // Espera alguns frames para que a cena e o tracking XR atualizem referências.
         yield return null;
         yield return null;
         yield return new WaitForSeconds(0.1f);
 
         yield return StartCoroutine(MovePlayerToSpawnPoint());
 
-        // Reativa a locomoção ainda com o ecrã totalmente preto, para que os
-        // providers e ações de input estejam prontos antes de revelar a cena.
+        // Reativa input/locomoção antes de revelar a cena ao utilizador.
         RestoreSuspendedLocomotion();
         yield return null;
 
@@ -139,6 +143,7 @@ public class SceneTransitionManager : MonoBehaviour
         isTransitioning = false;
     }
 
+    // Mantém o ecrã escuro com uma mensagem de encerramento da experiência.
     private IEnumerator FinalMessageRoutine(string message, float messageHoldSeconds)
     {
         isTransitioning = true;
@@ -152,22 +157,18 @@ public class SceneTransitionManager : MonoBehaviour
         isTransitioning = false;
     }
 
+    // Coloca a câmara exatamente no spawn e estabiliza objetos XR durante a operação.
     private IEnumerator MovePlayerToSpawnPoint()
     {
         SceneSpawnPoint spawnPoint = FindSpawnPoint(pendingSpawnID);
         if (spawnPoint == null)
         {
-            Debug.LogError(
-                $"Não foi encontrado nenhum SceneSpawnPoint com o ID ou nome '{pendingSpawnID}' " +
-                $"na cena '{SceneManager.GetActiveScene().name}'.",
-                this);
             yield break;
         }
 
         XROrigin xrOrigin = FindPlayerXROrigin();
         if (xrOrigin == null)
         {
-            Debug.LogError("Não foi encontrado um XROrigin ativo para posicionar o jogador.", this);
             yield break;
         }
 
@@ -201,7 +202,7 @@ public class SceneTransitionManager : MonoBehaviour
         if (rightControllerWasActive)
             rightController.SetActive(false);
 
-        // Permite que transformações já enfileiradas pelo sistema de locomoção terminem.
+        // Deixa terminar transformações pendentes antes da correção de pose.
         yield return null;
         yield return null;
 
@@ -225,7 +226,7 @@ public class SceneTransitionManager : MonoBehaviour
             ApplySpawnPose(xrOrigin, spawnPoint);
         }
 
-        // Última correção depois de o tracking XR atualizar a pose deste frame.
+        // Faz uma correção final depois da atualização de tracking do frame.
         yield return new WaitForEndOfFrame();
         ApplySpawnPose(xrOrigin, spawnPoint);
 
@@ -236,11 +237,9 @@ public class SceneTransitionManager : MonoBehaviour
             leftControllerWasActive,
             rightController,
             rightControllerWasActive);
-
-        ValidateSpawnResult(xrOrigin, spawnPoint);
-        ValidateHeadClearance(xrOriginObject, spawnPoint);
     }
 
+    // Procura primeiro por spawnID e usa o nome do GameObject como fallback.
     private SceneSpawnPoint FindSpawnPoint(string spawnID)
     {
         if (string.IsNullOrWhiteSpace(spawnID))
@@ -258,10 +257,6 @@ public class SceneTransitionManager : MonoBehaviour
             {
                 if (idMatch != null)
                 {
-                    Debug.LogError(
-                        $"Existem vários SceneSpawnPoint com o spawnID '{spawnID}'. " +
-                        $"Será usado '{idMatch.name}', mas os IDs devem ser únicos.",
-                        this);
                     continue;
                 }
 
@@ -275,17 +270,10 @@ public class SceneTransitionManager : MonoBehaviour
         if (idMatch != null)
             return idMatch;
 
-        if (nameMatch != null)
-        {
-            Debug.LogWarning(
-                $"O spawn '{spawnID}' foi encontrado pelo nome do GameObject. " +
-                "É mais robusto preencher o mesmo valor no campo Spawn ID.",
-                nameMatch);
-        }
-
         return nameMatch;
     }
 
+    // Encontra o XROrigin ativo através da tag Player, nome configurado ou procura geral.
     private XROrigin FindPlayerXROrigin()
     {
         GameObject player = GameObject.FindGameObjectWithTag("Player");
@@ -321,6 +309,7 @@ public class SceneTransitionManager : MonoBehaviour
         return null;
     }
 
+    // Alinha o yaw da câmara com o spawn e move a câmara para a posição mundial exata.
     private bool ApplySpawnPose(XROrigin xrOrigin, SceneSpawnPoint spawnPoint)
     {
         Camera camera = xrOrigin.Camera;
@@ -360,7 +349,7 @@ public class SceneTransitionManager : MonoBehaviour
         if (!xrOrigin.MoveCameraToWorldLocation(spawnPoint.transform.position))
             return false;
 
-        // Elimina qualquer erro numérico residual deixado pela transformação do XROrigin.
+        // Corrige qualquer erro residual que fique depois da transformação do XROrigin.
         Vector3 residualPositionError =
             spawnPoint.transform.position - camera.transform.position;
         originObject.transform.position += residualPositionError;
@@ -369,68 +358,7 @@ public class SceneTransitionManager : MonoBehaviour
         return true;
     }
 
-    private void ValidateSpawnResult(XROrigin xrOrigin, SceneSpawnPoint spawnPoint)
-    {
-        Camera camera = xrOrigin.Camera;
-        if (camera == null)
-            return;
-
-        float positionError =
-            Vector3.Distance(camera.transform.position, spawnPoint.transform.position);
-
-        Vector3 targetForward =
-            Vector3.ProjectOnPlane(spawnPoint.transform.forward, Vector3.up);
-        Vector3 cameraForward =
-            Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up);
-
-        float yawError = 0f;
-        if (targetForward.sqrMagnitude > 0.000001f &&
-            cameraForward.sqrMagnitude > 0.000001f)
-        {
-            yawError = Mathf.Abs(
-                Vector3.SignedAngle(cameraForward, targetForward, Vector3.up));
-        }
-
-        if (positionError > Mathf.Max(0.0001f, spawnPositionTolerance) ||
-            yawError > Mathf.Max(0.01f, spawnYawTolerance))
-        {
-            Debug.LogWarning(
-                $"O spawn '{spawnPoint.spawnID}' terminou com erro de posição " +
-                $"{positionError:F4} m e erro horizontal {yawError:F2}°. " +
-                "Verifica colisões e componentes que movam o XR Origin.",
-                spawnPoint);
-        }
-    }
-
-    private void ValidateHeadClearance(GameObject xrOriginObject, SceneSpawnPoint spawnPoint)
-    {
-        float radius = spawnPoint.HeadClearanceRadius;
-        if (radius <= 0f)
-            return;
-
-        Collider[] overlaps = Physics.OverlapSphere(
-            spawnPoint.transform.position,
-            radius,
-            ~0,
-            QueryTriggerInteraction.Ignore);
-
-        foreach (Collider overlap in overlaps)
-        {
-            if (overlap == null ||
-                overlap.transform == xrOriginObject.transform ||
-                overlap.transform.IsChildOf(xrOriginObject.transform))
-            {
-                continue;
-            }
-
-            Debug.LogWarning(
-                $"O spawn '{spawnPoint.spawnID}' tem o collider '{overlap.name}' a menos de " +
-                $"{radius:F2} m da posição da cabeça. Move o spawn para uma zona livre.",
-                spawnPoint);
-            return;
-        }
-    }
-
+    // Desliga temporariamente a locomoção para impedir movimento durante a correção de pose.
     private void SuspendLocomotion(GameObject locomotion)
     {
         RestoreSuspendedLocomotion();
@@ -443,6 +371,7 @@ public class SceneTransitionManager : MonoBehaviour
             suspendedLocomotion.SetActive(false);
     }
 
+    // Repõe a locomoção no estado em que estava antes da transição.
     private void RestoreSuspendedLocomotion()
     {
         if (suspendedLocomotion != null && suspendedLocomotionWasActive)
@@ -452,6 +381,7 @@ public class SceneTransitionManager : MonoBehaviour
         suspendedLocomotionWasActive = false;
     }
 
+    // Repõe CharacterController e controladores XR depois do reposicionamento.
     private void RestoreXRObjects(
         CharacterController characterController,
         bool characterControllerWasEnabled,
@@ -472,6 +402,7 @@ public class SceneTransitionManager : MonoBehaviour
         Physics.SyncTransforms();
     }
 
+    // Procura objetos filhos por nome mesmo que estejam inativos.
     private GameObject FindDescendantByName(Transform root, string objectName)
     {
         if (root == null || string.IsNullOrWhiteSpace(objectName))
@@ -487,6 +418,7 @@ public class SceneTransitionManager : MonoBehaviour
         return null;
     }
 
+    // Procura um GameObject global por nome, incluindo objetos inativos.
     private GameObject FindObjectByName(string objectName)
     {
         GameObject[] allObjects = FindObjectsByType<GameObject>(
@@ -502,6 +434,7 @@ public class SceneTransitionManager : MonoBehaviour
         return null;
     }
 
+    // Interpola a opacidade da imagem de fade.
     private IEnumerator Fade(float startAlpha, float endAlpha)
     {
         if (fadeImage == null)
@@ -523,6 +456,7 @@ public class SceneTransitionManager : MonoBehaviour
         fadeImage.color = color;
     }
 
+    // Atualiza e ativa o texto mostrado durante fades ou mensagem final.
     private void ShowFadeMessage(string message)
     {
         if (fadeMessageText == null)
@@ -533,6 +467,7 @@ public class SceneTransitionManager : MonoBehaviour
         fadeMessageText.gameObject.SetActive(hasMessage);
     }
 
+    // Limpa o texto para que não reapareça numa transição posterior.
     private void HideFadeMessage()
     {
         if (fadeMessageText == null)

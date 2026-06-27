@@ -2,11 +2,17 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 
+/*
+ * Ajusta a física de móveis pesados quando são agarrados em XR.
+ * Com uma mão, o objeto pode ser limitado a arrastar no chão; com duas mãos,
+ * pode receber menos resistência e, opcionalmente, ser levantado.
+ */
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(UnityEngine.XR.Interaction.Toolkit.Interactables.XRGrabInteractable))]
 public class HeavyTwoHandFurniture : MonoBehaviour
 {
+    // Regras principais que definem como o móvel reage a uma ou duas mãos.
     [Header("Regras")]
     [Tooltip("Com 1 mão, bloqueia altura (Y) para só arrastar no chão.")]
     public bool oneHandDragOnly = true;
@@ -14,6 +20,7 @@ public class HeavyTwoHandFurniture : MonoBehaviour
     [Tooltip("Com 2 mãos, permite levantar (desbloqueia Y).")]
     public bool allowLiftWithTwoHands = true;
 
+    // Resistência extra aplicada para transmitir sensação de peso.
     [Header("Física (sensação de peso)")]
     [Tooltip("Drag extra quando está agarrado com 1 mão.")]
     public float oneHandExtraDrag = 3f;
@@ -27,6 +34,7 @@ public class HeavyTwoHandFurniture : MonoBehaviour
     [Tooltip("Angular drag extra quando está agarrado com 2 mãos.")]
     public float twoHandExtraAngularDrag = 6f;
 
+    // Estabilização para reduzir tombos e rotações desconfortáveis.
     [Header("Estabilidade")]
     [Tooltip("Baixa o centro de massa para reduzir tombos (valores negativos em Y).")]
     public Vector3 centerOfMassOffset = new Vector3(0f, -0.2f, 0f);
@@ -44,21 +52,19 @@ public class HeavyTwoHandFurniture : MonoBehaviour
 
     readonly HashSet<UnityEngine.XR.Interaction.Toolkit.Interactors.IXRSelectInteractor> selectingInteractors = new();
 
+    // Guarda o estado físico original e força o modo de seleção múltipla.
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
         grab = GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactables.XRGrabInteractable>();
 
-        // Guardar valores originais
         baseDrag = rb.linearDamping;
         baseAngularDrag = rb.angularDamping;
         baseCenterOfMass = rb.centerOfMass;
         baseConstraints = rb.constraints;
 
-        // Garantir 2 mãos
         grab.selectMode = UnityEngine.XR.Interaction.Toolkit.Interactables.InteractableSelectMode.Multiple;
 
-        // Centro de massa mais baixo (estável)
         rb.centerOfMass = baseCenterOfMass + centerOfMassOffset;
 
         grab.selectEntered.AddListener(OnSelectEntered);
@@ -67,6 +73,7 @@ public class HeavyTwoHandFurniture : MonoBehaviour
         ApplyMode();
     }
 
+    // Remove listeners para evitar chamadas a objetos destruídos.
     void OnDestroy()
     {
         if (grab != null)
@@ -76,6 +83,7 @@ public class HeavyTwoHandFurniture : MonoBehaviour
         }
     }
 
+    // Mantém o conjunto de mãos/controladores que seguram o móvel.
     void OnSelectEntered(SelectEnterEventArgs args)
     {
         selectingInteractors.Add(args.interactorObject);
@@ -88,11 +96,11 @@ public class HeavyTwoHandFurniture : MonoBehaviour
         ApplyMode();
     }
 
+    // Recalcula as restrições sempre que muda o número de mãos.
     void ApplyMode()
     {
         int hands = selectingInteractors.Count;
 
-        // Reset para base sempre que muda
         rb.linearDamping = baseDrag;
         rb.angularDamping = baseAngularDrag;
         rb.constraints = baseConstraints;
@@ -104,13 +112,11 @@ public class HeavyTwoHandFurniture : MonoBehaviour
 
         if (!isTwoHands)
         {
-            // 1 mão
             rb.linearDamping = baseDrag + oneHandExtraDrag;
             rb.angularDamping = baseAngularDrag + oneHandExtraAngularDrag;
 
             if (oneHandDragOnly)
             {
-                // Só arrasta (não levanta)
                 rb.constraints |= RigidbodyConstraints.FreezePositionY;
             }
 
@@ -121,13 +127,11 @@ public class HeavyTwoHandFurniture : MonoBehaviour
         }
         else
         {
-            // 2 mãos
             rb.linearDamping = baseDrag + twoHandExtraDrag;
             rb.angularDamping = baseAngularDrag + twoHandExtraAngularDrag;
 
             if (!allowLiftWithTwoHands)
             {
-                // Mesmo com 2 mãos continua no chão
                 rb.constraints |= RigidbodyConstraints.FreezePositionY;
             }
 
