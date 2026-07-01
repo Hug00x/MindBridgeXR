@@ -222,33 +222,99 @@ Ficheiros gerados:
 
 Os ficheiros não devem incluir nomes reais nem identificadores diretos. A associação entre código pseudonimizado e participante, caso exista em estudos futuros, deve ser guardada separadamente e com acesso restrito.
 
-## Como Abrir o Projeto
+## Como Fazer Build and Run no Unity
 
-1. Instalar Unity `6000.3.7f1`.
-2. Abrir o repositório pela Unity Hub.
-3. Aguardar a restauração dos pacotes definidos em `Packages/manifest.json`.
-4. Abrir `Assets/Scenes/Floor1_Scene.unity`.
-5. Confirmar que as cenas `Floor1_Scene`, `Floor2_Scene` e `Exterior_Scene` estão ativas em Build Settings.
-6. Executar em Play Mode com XR Simulation ou compilar para Meta Quest.
+Esta secção explica o processo desde a instalação do Unity até correr o projeto no Meta Quest.
 
-## Build para Meta Quest
+### 1. Instalar o Unity
 
-Passos recomendados:
+1. Instalar o Unity Hub.
+2. No Unity Hub, instalar o editor Unity `6000.3.7f1`, que é a versão usada neste projeto.
+3. Durante a instalação do editor, adicionar os módulos para Android:
+   - `Android Build Support`
+   - `Android SDK & NDK Tools`
+   - `OpenJDK`
+4. Se a versão `6000.3.7f1` não aparecer diretamente no Unity Hub, procurar a versão no arquivo de downloads da Unity e abrir a instalação através do Unity Hub.
+
+Estes módulos são necessários porque o Meta Quest corre aplicações Android.
+
+### 2. Abrir o projeto
+
+1. Abrir o Unity Hub.
+2. Escolher `Add project from disk`.
+3. Selecionar a pasta raiz deste repositório, ou seja, a pasta que contém `Assets/`, `Packages/` e `ProjectSettings/`.
+4. Abrir o projeto com Unity `6000.3.7f1`.
+5. Aguardar até o Unity importar os assets e restaurar os pacotes definidos em `Packages/manifest.json`.
+6. Abrir a cena inicial:
+
+```text
+Assets/Scenes/Floor1_Scene.unity
+```
+
+### 3. Confirmar as cenas do build
+
+Antes de correr ou compilar, confirmar que as cenas principais estão incluídas no build:
 
 1. Abrir `File > Build Profiles` ou `File > Build Settings`.
-2. Selecionar Android.
-3. Confirmar arquitetura ARM64.
-4. Confirmar que OpenXR e Meta Quest Support estão ativos.
-5. Confirmar que as três cenas principais estão incluídas e ativas.
-6. Ligar o Meta Quest por USB com Developer Mode ativo.
-7. Usar `Build And Run`.
+2. Verificar a lista `Scenes In Build`.
+3. Confirmar que estas cenas estão ativas:
 
-Antes de uma entrega pública ou instalação final, recomenda-se atualizar:
+| Cena | Deve estar ativa? |
+| --- | --- |
+| `Assets/Scenes/Floor1_Scene.unity` | Sim |
+| `Assets/Scenes/Floor2_Scene.unity` | Sim |
+| `Assets/Scenes/Exterior_Scene.unity` | Sim |
 
-- `companyName`, atualmente herdado da configuração padrão.
-- `applicationIdentifier` Android, atualmente baseado no template Unity.
-- Ícone, splash screen e metadados da aplicação.
-- Assinatura/keystore, se for necessária distribuição controlada.
+### 4. Correr no editor
+
+Para um teste rápido dentro do Unity:
+
+1. Abrir `Assets/Scenes/Floor1_Scene.unity`.
+2. Carregar no botão `Play`.
+3. Usar XR Simulation, se estiver configurado no editor, para testar interações básicas sem headset.
+
+O teste no editor é útil para validar lógica, cenas e UI, mas a experiência final deve ser testada no Meta Quest, porque os comandos, desempenho e comportamento XR real dependem do headset.
+
+### 5. Preparar o Meta Quest
+
+1. Ativar `Developer Mode` no Meta Quest.
+2. Ligar o headset ao computador por USB.
+3. Colocar o headset e aceitar a permissão de USB/debugging, se aparecer.
+4. Confirmar que o Unity reconhece o dispositivo em `Run Device`, dentro de `Build Profiles` ou `Build Settings`.
+
+### 6. Fazer Build and Run para Meta Quest
+
+1. Abrir `File > Build Profiles` ou `File > Build Settings`.
+2. Selecionar a plataforma `Android`.
+3. Se ainda não estiver ativa, escolher `Switch Platform`.
+4. Confirmar as configurações principais:
+
+| Configuração | Valor esperado |
+| --- | --- |
+| Plataforma | Android |
+| Dispositivo alvo | Meta Quest |
+| Arquitetura | ARM64 |
+| Minimum API Level | Android SDK 32 |
+| Target API Level | Android SDK 34 |
+| XR Plug-in | OpenXR |
+| Meta Quest Support | Ativo |
+
+5. Escolher o Meta Quest em `Run Device`.
+6. Clicar em `Build And Run`.
+7. Escolher uma pasta para guardar o ficheiro `.apk`, se o Unity pedir.
+8. Aguardar a compilação, instalação no headset e arranque automático da aplicação.
+
+Depois do `Build And Run`, a aplicação fica instalada no Meta Quest. Se não arrancar automaticamente, procurar a aplicação instalada no headset e abrir manualmente.
+
+### 7. Problemas comuns
+
+| Problema | Possível solução |
+| --- | --- |
+| O botão `Build And Run` não aparece ou está desativado | Confirmar que a plataforma Android está selecionada e que os módulos Android foram instalados no Unity Hub. |
+| O Meta Quest não aparece em `Run Device` | Confirmar o cabo USB, aceitar a permissão dentro do headset e verificar se o Developer Mode está ativo. |
+| Erro relacionado com SDK, NDK ou JDK | Reabrir o Unity Hub e garantir que `Android SDK & NDK Tools` e `OpenJDK` estão instalados para a versão correta do Unity. |
+| A aplicação abre numa cena errada | Confirmar que `Floor1_Scene` está ativa e é a primeira cena principal em `Scenes In Build`. |
+| A simulação no editor não corresponde ao headset | Testar no Meta Quest através de `Build And Run`, porque o comportamento final depende do dispositivo real. |
 
 ## Interação
 
